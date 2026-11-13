@@ -10,3 +10,6 @@
 !.codex/prompts/
 !.codex/prompts/**
 /mini-redis/target/
+
+# Local Mini Redis AOF data (never commit runtime logs)
+/mini-redis/data/

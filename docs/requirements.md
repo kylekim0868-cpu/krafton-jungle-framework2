@@ -93,7 +93,7 @@ REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 
 | REDIS-03 | [KJF-54](https://kylekim0868.atlassian.net/browse/KJF-54) | [`feat/KJF-54-ym-ttl-concurrency`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-54-ym-ttl-concurrency) |
 | REDIS-04 | [KJF-55](https://kylekim0868.atlassian.net/browse/KJF-55) | [`feat/KJF-55-ym-product-cache`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-55-ym-product-cache) |
 | REDIS-05 | [KJF-56](https://kylekim0868.atlassian.net/browse/KJF-56) | [`feat/KJF-56-ym-cache-benchmark`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-56-ym-cache-benchmark) |
-| REDIS-AOF | [KJF-57](https://kylekim0868.atlassian.net/browse/KJF-57) (이번 요청에서 채택) | 다음 단계에서 생성 |
+| REDIS-AOF | [KJF-57](https://kylekim0868.atlassian.net/browse/KJF-57) (채택) | [`feat/KJF-57-ym-aof-recovery`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-57-ym-aof-recovery) |
 | DBMS-01 | 후속 착수 시 연결 | 착수 요청 후 생성 |
 | DBMS-02 | 후속 착수 시 연결 | 착수 요청 후 생성 |
 | DBMS-03 | 후속 착수 시 연결 | 착수 요청 후 생성 |
@@ -108,3 +108,5 @@ REDIS-03 최초 publish: `a5e7adff242a49105ce4bc759cbf56dc726f99e0`, upstream=`o
 REDIS-04 최초 publish: `6293dd96bd7fd223bb02c23abed048f5bc6df6c9`, upstream=`origin/feat/KJF-55-ym-product-cache`, 원격 SHA 일치. [검증 기록](redis-04-verification.md).
 
 REDIS-05 최초 publish: `0b0fbc48481cbb4014f34b5e36509cb2e1975732`, upstream=`origin/feat/KJF-56-ym-cache-benchmark`, 원격 SHA 일치. [동일 조건 실제 측정 기록](redis-05-verification.md).
+
+REDIS-AOF 최초 publish: `9a1261c150c97fc617d78e002b1a708966ce198c`, upstream=`origin/feat/KJF-57-ym-aof-recovery`, 원격 SHA 일치. [AOF 형식·복구·검증·비용 기록](redis-aof-verification.md).
