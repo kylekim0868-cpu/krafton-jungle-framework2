@@ -4,7 +4,7 @@ Java로 Mini Redis와 Mini DBMS를 직접 구현하고, 공통 기준으로 검�
 
 ## 현재 상태
 
-현재 `ym-mini-redis` 브랜치는 Java·Maven Wrapper·OMX 개발 환경, 아키텍처, 프로젝트 폴더 구조를 준비하는 단계다. [Jira KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51)
+0단계 설정은 `ym-mini-redis` / [KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51)에 보존한다. REDIS-01은 설정 커밋 `881be2c`에서 분기한 `feat/KJF-52-ym-hash-table` / [KJF-52](https://kylekim0868.atlassian.net/browse/KJF-52)에서 진행한다. 현재 구현 범위는 버킷 배열·체이닝 기반 메모리 저장소와 JUnit 단위 테스트다.
 
 Mini Redis를 먼저 구현한다. 해시 테이블 → HTTP API → TTL과 동시성 → 상품 API 연동 → 성능 비교 순서로 진행하며, AOF는 선택 기능이다. Mini DBMS는 후속 작업이다.
 
@@ -19,6 +19,7 @@ Mini Redis를 먼저 구현한다. 해시 테이블 → HTTP API → TTL과 동�
 | [작업 지침](AGENTS.md) | 에이전트의 구현 순서와 검증·보고 규칙 |
 | [팀 개발 규칙](TEAM_DEVELOPMENT_RULES.md) | 요구사항·이슈·브랜치 연결, Git·Jira, PR 리뷰와 선별 통합 절차 |
 | [0단계 검증 기록](docs/redis-00-verification.md) | KJF-51 설정 범위, Java·Maven·OMX 검증 결과와 남은 제약 |
+| [REDIS-01 검증 기록](docs/redis-01-verification.md) | 해시 테이블·저장소 API, 사전 할당·리사이즈 설계, 단위 테스트 결과 |
 
 ### 기능별 바로가기
 
@@ -38,4 +39,4 @@ cd mini-redis
 ./mvnw test
 ```
 
-설정 단계에서 `./mvnw test`는 빌드 구성이 로드되는지 확인한다. 저장소 단위 테스트는 1단계 해시 테이블 작업에서 추가한다. HTTP 기능 테스트와 성능 실험의 실행 방법·결과는 해당 기능 구현 시 기록한다.
+REDIS-01의 `./mvnw test`는 저장소와 해시 테이블의 실제 JUnit 테스트를 실행한다. 0단계의 테스트 없는 빌드 설정 확인과 구별한다. HTTP 기능 테스트와 성능 실험은 아직 범위 밖이며, 해당 기능 구현 시 실행 방법·결과를 기록한다.
