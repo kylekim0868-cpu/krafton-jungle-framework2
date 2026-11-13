@@ -1,5 +1,0 @@
-.gradle/
-build/
-data/*.aof
-data/*.json
-data/*.tmp
