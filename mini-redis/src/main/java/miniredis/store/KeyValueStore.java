@@ -1,30 +1,64 @@
 package miniredis.store;
 
+import java.time.Clock;
+import java.util.Objects;
 import java.util.Optional;
 
-/** 메모리 전용 문자열 저장소. null은 허용하지 않으며 TTL과 동시성 제어는 제공하지 않는다. */
+/** 만료 확인과 변경을 같은 모니터로 보호하는 단일 프로세스 저장소. */
 public final class KeyValueStore {
     private final StringHashTable table;
+    private final Clock clock;
 
-    /** 예상 최대 고유 키 수에 맞춰 적재율 0.75 기준으로 버킷을 사전 할당한다. */
     public KeyValueStore(int expectedEntries) {
+        this(expectedEntries, Clock.systemUTC());
+    }
+
+    /** 시계는 TTL 경계 테스트와 재시작 시 절대 만료 시각 판정에 사용한다. */
+    public KeyValueStore(int expectedEntries, Clock clock) {
         table = StringHashTable.withExpectedSize(expectedEntries);
+        this.clock = Objects.requireNonNull(clock, "clock");
     }
 
-    public void put(String key, String value) {
-        table.put(key, value);
+    public synchronized void put(String key, String value) {
+        table.put(key, value); // 만료 없는 덮어쓰기는 이전 만료 설정도 제거한다.
     }
 
-    /** 빈 문자열은 존재하는 값이며, 없는 키만 Optional.empty()를 반환한다. */
-    public Optional<String> get(String key) {
-        return table.get(key);
+    public synchronized void put(String key, String value, long ttlMs) {
+        if (ttlMs <= 0) {
+            throw new IllegalArgumentException("ttlMs must be positive");
+        }
+        long expiresAt;
+        try {
+            expiresAt = Math.addExact(clock.millis(), ttlMs);
+        } catch (ArithmeticException overflow) {
+            throw new IllegalArgumentException("expiration is out of range", overflow);
+        }
+        table.put(key, value, expiresAt);
     }
 
-    public boolean delete(String key) {
-        return table.delete(key);
+    /** 조회·만료 판정·삭제가 원자적이므로 이전 만료가 새 값을 지우지 않는다. */
+    public synchronized Optional<String> get(String key) {
+        var entry = table.entry(key);
+        if (entry.isEmpty()) {
+            return Optional.empty();
+        }
+        if (entry.orElseThrow().expired(clock.millis())) {
+            table.delete(key);
+            return Optional.empty();
+        }
+        return Optional.of(entry.orElseThrow().value());
     }
 
-    public int size() {
+    public synchronized boolean delete(String key) {
+        // 만료된 키의 삭제는 없는 키와 같다.
+        boolean present = get(key).isPresent();
+        table.delete(key);
+        return present;
+    }
+
+    /** 유효 키 수. 만료 정리는 O(버킷 수 + 키 수)이며 백그라운드 스캐너는 없다. */
+    public synchronized int size() {
+        table.removeExpired(clock.millis());
         return table.size();
     }
 }

@@ -1,7 +1,7 @@
 # Mini Redis 작업 지침
 
 - 구현 전 [요구사항과 단계별 완료 기준](docs/requirements.md) 및 [아키텍처와 폴더 구조](docs/architecture.md)를 읽고, 관련 코드와 테스트를 확인한다.
-- `ym-mini-redis`는 `REDIS-00` / `KJF-51`의 설정 브랜치, `feat/KJF-52-ym-hash-table`은 `REDIS-01` / `KJF-52`의 저장소 브랜치로 보존한다. 현재 `REDIS-02` / `KJF-53`은 구현 계획의 기준 커밋 `c4dabbb`에서 분기·최초 publish한 `feat/KJF-53-ym-http-api`에서 진행한다. 기존 저장소를 재사용해 HTTP API와 실제 HTTP 테스트까지만 구현한다. `ttlMs`는 현재 400으로 거절하며, TTL·다중 요청 처리용 저장소 잠금은 REDIS-03의 별도 착수 요청 전 구현하지 않는다.
+- 현재 일괄 착수 범위는 REDIS-03 → REDIS-04 → REDIS-05 → REDIS-AOF다. 선행 단계의 검증을 통과한 커밋에서 요구사항별 전용 브랜치를 생성·즉시 publish하고 누적 구현한다. 이번 실행 요청은 단계별 검증 후 커밋·Push·PR 전달까지 포함한다. main에 선행 구현이 없으므로 REDIS-03은 REDIS-02 PR #23이 병합된 `origin/ym-mini-redis`의 `a5e7adf`를 기준으로 삼는다. 이후 PR은 직전 단계 브랜치를 대상으로 하며 자동 승인·병합·Jira 완료 전환은 하지 않는다. Mini DBMS는 제외한다.
 - 각 단계는 맡은 범위의 구현과 검증까지 완료한다. 한 요청에서 여러 단계를 맡은 경우 이전 단계의 검증 결과를 확인하고 다음 단계로 진행한다. Mini DBMS는 별도 착수 시점에 구현한다.
 - Java로 구현한다. Mini Redis의 해시 테이블과 추후 Mini DBMS의 SQL 처리기·B+ 트리는 직접 구현한다. HTTP, JSON 변환, 빌드와 테스트에는 설계안의 도구를 사용한다.
 - 필수 동작과 개인 설계 선택을 구분한다. API의 입출력, 동시성 정책, 저장 형식에 영향이 있는 변경은 이유와 영향을 기록한다. 결정한 이유는 코드와 테스트에서 확인할 수 있는 사례로 설명한다.

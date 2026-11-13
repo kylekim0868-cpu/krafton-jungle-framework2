@@ -27,6 +27,10 @@ final class StringHashTable {
     }
 
     void put(String key, String value) {
+        put(key, value, null);
+    }
+
+    void put(String key, String value, Long expiresAt) {
         validateKey(key);
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
@@ -35,7 +39,7 @@ final class StringHashTable {
         int index = bucketIndex(key, buckets.length);
         for (Node node = buckets[index]; node != null; node = node.next) {
             if (node.key.equals(key)) {
-                node.value = value;
+                node.entry = new Entry(value, expiresAt);
                 return;
             }
         }
@@ -45,19 +49,50 @@ final class StringHashTable {
             resize();
             index = bucketIndex(key, buckets.length);
         }
-        buckets[index] = new Node(key, value, buckets[index]);
+        buckets[index] = new Node(key, new Entry(value, expiresAt), buckets[index]);
         size++;
     }
 
     Optional<String> get(String key) {
+        return entry(key).map(Entry::value);
+    }
+
+    Optional<Entry> entry(String key) {
         validateKey(key);
         int index = bucketIndex(key, buckets.length);
         for (Node node = buckets[index]; node != null; node = node.next) {
             if (node.key.equals(key)) {
-                return Optional.of(node.value);
+                return Optional.of(node.entry);
             }
         }
         return Optional.empty();
+    }
+
+    void removeExpired(long now) {
+        for (int i = 0; i < buckets.length; i++) {
+            Node previous = null;
+            Node node = buckets[i];
+            while (node != null) {
+                Node next = node.next;
+                if (node.entry.expired(now)) {
+                    if (previous == null) {
+                        buckets[i] = next;
+                    } else {
+                        previous.next = next;
+                    }
+                    size--;
+                } else {
+                    previous = node;
+                }
+                node = next;
+            }
+        }
+    }
+
+    record Entry(String value, Long expiresAt) {
+        boolean expired(long now) {
+            return expiresAt != null && now >= expiresAt;
+        }
     }
 
     boolean delete(String key) {
@@ -118,12 +153,12 @@ final class StringHashTable {
 
     private static final class Node {
         private final String key;
-        private String value;
+        private Entry entry;
         private Node next;
 
-        private Node(String key, String value, Node next) {
+        private Node(String key, Entry entry, Node next) {
             this.key = key;
-            this.value = value;
+            this.entry = entry;
             this.next = next;
         }
     }
