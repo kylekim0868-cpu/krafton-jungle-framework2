@@ -24,6 +24,8 @@ REDIS-00~02 구현은 개인 통합 브랜치에 전달됐으며, 현재 REDIS-0
 
 | [REDIS-04 검증 기록](docs/redis-04-verification.md) | 상품 API 캐시 적중·만료·무효화·장애 fallback |
 
+| [REDIS-05 성능 비교](docs/redis-05-verification.md) | 동일 조건 미사용·미스·적중의 실측값과 재현 방법 |
+
 ### 기능별 바로가기
 
 - **Mini Redis**: [구현 단계](docs/requirements.md#현재-범위와-구현-순서) · [필수 동작](docs/requirements.md#mini-redis-필수-동작) · [HTTP API](docs/requirements.md#외부-http-api)
