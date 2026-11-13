@@ -1,0 +1,27 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: mini-redis
+  jackson:
+    serialization:
+      write-dates-as-timestamps: true
+
+miniredis:
+  # AOF / RDB 파일 저장 디렉터리 (실행 위치 기준 상대 경로)
+  data-dir: data
+  # Segment Lock 개수
+  segments: 16
+  # 세그먼트별 초기 버킷 수 (작게 잡아 리사이징/체이닝을 대시보드에서 쉽게 관찰)
+  initial-capacity-per-segment: 4
+  ttl:
+    # Active Expiration 주기 (ms)
+    active-interval-ms: 1000
+  rdb:
+    # RDB 스냅샷 주기 (초)
+    interval-seconds: 30
+
+logging:
+  level:
+    com.miniredis: INFO
