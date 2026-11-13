@@ -174,14 +174,30 @@ public class HashTable {
         }
     }
 
-    /** 조회. 키가 없으면 null */
+    /**
+     * 조회 + Lazy Expiration(수동적 만료).
+     *
+     * <p>조회 시점에 엔트리가 만료되었으면(현재시각 > expireAt) 즉시 체인에서 제거하고 null 을 반환한다.
+     * 백그라운드 스케줄러가 아직 지우지 못한 만료 키도 클라이언트에게는 절대 노출되지 않는다.</p>
+     */
     public Object get(String key) {
         validateKey(key);
         int index = hash(key);
-        for (Entry<String, Object> node = buckets[index]; node != null; node = node.next) {
+        long now = System.currentTimeMillis();
+
+        Entry<String, Object> prev = null;
+        Entry<String, Object> node = buckets[index];
+        while (node != null) {
             if (node.key.equals(key)) {
+                if (node.isExpired(now)) {
+                    // ---- Lazy Expiration: 만료 발견 즉시 체인에서 unlink ----
+                    unlink(index, prev, node);
+                    return null;
+                }
                 return node.value;
             }
+            prev = node;
+            node = node.next;
         }
         return null;
     }
@@ -207,20 +223,22 @@ public class HashTable {
     }
 
     /**
-     * 삭제.
+     * 삭제. 만료되었지만 아직 정리되지 않은 키는 "존재하지 않는 키"로 간주하여 false 를 반환한다.
      *
-     * @return 키를 삭제했으면 true
+     * @return 유효한 키를 삭제했으면 true
      */
     public boolean remove(String key) {
         validateKey(key);
         int index = hash(key);
+        long now = System.currentTimeMillis();
 
         Entry<String, Object> prev = null;
         Entry<String, Object> node = buckets[index];
         while (node != null) {
             if (node.key.equals(key)) {
+                boolean wasAlive = !node.isExpired(now);
                 unlink(index, prev, node);
-                return true;
+                return wasAlive;
             }
             prev = node;
             node = node.next;
@@ -275,6 +293,35 @@ public class HashTable {
 
     public int resizeCount() {
         return resizeCount;
+    }
+
+    // =====================================================================
+    // Active Expiration 지원
+    // =====================================================================
+
+    /**
+     * 모든 버킷을 순회하며 만료된 엔트리를 제거한다. (TTLManager 의 Active Expiration 에서 호출)
+     *
+     * @return 제거된 엔트리 수
+     */
+    public int removeExpired(long now) {
+        int removed = 0;
+        for (int i = 0; i < buckets.length; i++) {
+            Entry<String, Object> prev = null;
+            Entry<String, Object> node = buckets[i];
+            while (node != null) {
+                Entry<String, Object> next = node.next; // unlink 시 next 가 끊기므로 미리 보관
+                if (node.isExpired(now)) {
+                    unlink(i, prev, node);
+                    removed++;
+                    // prev 는 그대로 유지 (삭제된 노드는 prev 가 될 수 없음)
+                } else {
+                    prev = node;
+                }
+                node = next;
+            }
+        }
+        return removed;
     }
 
     // =====================================================================
