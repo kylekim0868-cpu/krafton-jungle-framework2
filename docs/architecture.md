@@ -1,6 +1,6 @@
 # Mini Redis·Mini DBMS 아키텍처
 
-Mini Redis는 직접 만든 해시 테이블을 HTTP로 제공한다. 상품 API는 조회 결과를 캐싱하고, Mini DBMS는 후속 단계에서 상품 데이터의 원본을 맡는다. 현재는 Mini Redis를 먼저 구현하고 테스트용 원본으로 상품 API의 캐시 동작을 검증한다. [단계별 완료 기준](requirements.md#현재-범위와-구현-순서)
+Mini Redis는 직접 만든 해시 테이블을 HTTP로 제공한다. 상품 API는 조회 결과를 캐싱하고, Mini DBMS는 후속 단계에서 상품 데이터의 원본을 맡는다. Mini Redis와 테스트용 원본으로 상품 API의 캐시 동작을 검증한다. [단계별 완료 기준](requirements.md#현재-범위와-구현-순서)
 
 ## 모듈 구조와 의존 방향
 
@@ -25,11 +25,15 @@ Mini DBMS 후속 구성
 
 `MiniRedisHttpServer`는 JDK HttpServer와 고정 4개 작업 스레드를 소유하고 `KeysHandler`에 같은 `KeyValueStore`를 주입한다. HTTP 경계는 JSON·상태 코드만 처리한다. 저장소의 synchronized 메서드가 직접 만든 해시 테이블 엔트리의 값·절대 만료 시각을 함께 보호한다. 조회·만료 판정·삭제는 한 임계영역이다. `Clock`을 주입해 정확한 만료 경계를 테스트하며, TTL 없는 덮어쓰기는 만료를 제거한다. `size()`는 만료 항목을 순회 정리한 유효 키 수다. 백그라운드 만료 스캐너는 없으며 재접근하지 않는 만료 항목은 get/size 때 정리된다. 서버 생성·바인딩은 start 때, 종료 시 서버와 Executor를 정리한다. 고정 스레드 풀의 대기열은 제한하지 않아 운영용 부하 차단은 범위 밖이다.
 
-선택 기능인 AOF는 저장소의 쓰기 경계에 연결한다. 저장소가 로그 기록·동기화와 메모리 반영 순서를 관리하고, 재시작할 때는 HTTP 요청을 받기 전에 로그를 재생한다.
+상품 예제는 같은 Maven 빌드의 `miniredis.product` 패키지이며 [실행 안내](../examples/product-api/README.md)를 둔다. ProductMain과 Mini Redis Main은 별도 JVM이다. ProductOrigin 경계 뒤의 테스트 원본을 향후 DBMS로 교체할 수 있다. HttpKeyCache는 재사용 HttpClient, 전체 응답 deadline, 응답 크기 제한을 적용한다. 캐시 장애는 관찰 가능한 카운터를 늘리고 원본으로 fallback하며 원본 실패는503이다.
+
+채택한 AOF는 저장소의 쓰기 경계에 연결한다. MutationLog.append가 프레임 전체 쓰기와 force(true)를 마친 뒤 저장소가 메모리를 변경한다. 동일 저장소 모니터가 로그 순서와 메모리 순서를 함께 보호한다. 기록·동기화 실패는503과 재시작까지 쓰기 차단이며 읽기는 직전 메모리 상태를 제공한다. 실패 응답의 기록도 재시작 후 복구될 수 있어 결과는 불확정이다.
+
+Main의 선택적인 세 번째 인자로 AOF 경로를 받는다. openPersistent가 HTTP 시작 전에 전체 로그를 순서 재생하고 마지막 상태에서 만료를 정리한다. 불완전한 마지막 프레임만 절단·동기화하고 완전한 손상은 시작을 중단한다. AofLog는 JVM registry에서 실제 파일 중복을 채널 개방 전에 거절하고, 별도 프로세스에는 FileLock을 사용한다. 메모리 모드도 유지하며 저장소/로그 자원의 소유자는 Main이다. [상세 형식과 장애 절차](redis-aof-verification.md).
 
 ## 폴더 구조
 
-아래는 목표 구조다. 설정 단계에서는 `mini-redis/`의 빌드 설정과 소스·테스트 경로를 마련한다. Java 파일과 후속 모듈은 각 기능에 착수할 때 추가한다.
+현재 Mini Redis 구조와 후속 DBMS의 예정 위치다. DBMS 디렉터리와 구현은 아직 생성하지 않았다.
 
 ```text
 저장소 루트
@@ -41,25 +45,29 @@ Mini DBMS 후속 구성
 │   ├── architecture.md          모듈 구조와 데이터 흐름
 │   ├── redis-00-verification.md  0단계 설정 검증 결과와 제약
 │   ├── redis-01-verification.md  저장소 설계와 단위 테스트 결과
-│   └── redis-02-verification.md  HTTP API·TTL 미지원 정책·실제 네트워크 검증
+│   ├── redis-02-verification.md  HTTP API 이력
+│   ├── redis-03-verification.md  TTL·공통 잠금
+│   ├── redis-04-verification.md  상품 API 캐시
+│   ├── redis-05-verification.md  캐시 성능 비교
+│   ├── redis-aof-verification.md 프레임·복구·동기화 비용
+│   └── benchmarks/              실제 측정 JSON Lines
 ├── mini-redis/
 │   ├── pom.xml                  0단계 Maven 설정
 │   ├── mvnw, mvnw.cmd           Maven Wrapper
 │   ├── .mvn/wrapper/            Maven Wrapper 설정
 │   └── src/
-│       ├── main/java/          1단계 해시 테이블·저장소, 2단계 HTTP 서버
-│       └── test/java/          JUnit 저장소 단위 테스트와 HTTP 기능 테스트
+│       ├── main/java/miniredis/ store·http·product·persistence·benchmark
+│       └── test/java/miniredis/ 단위·실제 HTTP·별도 JVM 복구 테스트
 ├── examples/
 │   └── product-api/            4단계 외부 캐시 사용 예제
-└── mini-dbms/
-    └── README.md                후속 구현 범위 기록
+└── mini-dbms/                   후속 예정 (아직 미생성)
 ```
 
-`src/main/java/` 아래에서 해시 테이블과 저장소는 `store` 패키지에, HTTP 서버와 요청 처리는 `http` 패키지에 둔다. 테스트 패키지는 검증할 코드의 패키지와 맞춘다. AOF를 채택하면 로그 코드를 `persistence` 패키지에 둔다. Mini DBMS의 Maven 설정과 소스 구조는 해당 프로젝트에 착수할 때 추가한다.
+`src/main/java/` 아래에서 해시 테이블과 저장소는 `store` 패키지에, HTTP 서버와 요청 처리는 `http` 패키지에 둔다. 테스트 패키지는 검증할 코드의 패키지와 맞춘다. AOF 코드는 `persistence`, 상품 예제는 `product`, 재현 실험은 `benchmark` 패키지에 둔다. Mini DBMS의 Maven 설정과 소스 구조는 해당 프로젝트에 착수할 때 추가한다.
 
 ## 기술 스택과 실행
 
 - Java 25 LTS와 Maven Wrapper를 사용한다.
-- HTTP 서버는 JDK `HttpServer`, JSON 처리는 Jackson 3.3.0, 테스트는 JUnit을 사용한다. `Main`은 포트·예상 키 수를 받아 loopback 주소에서 서버를 실행한다.
+- HTTP 서버는 JDK `HttpServer`, JSON 처리는 Jackson 3.3.0, 테스트는 JUnit을 사용한다. `Main`은 포트·예상 키 수와 선택 AOF 경로를 받아 loopback 주소에서 서버를 실행한다.
 - Maven Wrapper를 구성한 뒤 `mini-redis/`에서 `./mvnw test`를 실행한다. HTTP 기능 테스트는 서버를 기동해 별도 HTTP 클라이언트가 실제 요청과 응답을 확인한다.
 - 상품 API 연동 시 Mini Redis와 상품 API는 독립 프로세스로 실행한다. Mini DBMS 연동 단계에서는 DBMS도 별도 프로세스로 실행한다.

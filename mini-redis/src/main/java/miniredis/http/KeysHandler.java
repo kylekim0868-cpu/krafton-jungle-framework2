@@ -3,6 +3,7 @@ package miniredis.http;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import miniredis.store.KeyValueStore;
+import miniredis.persistence.StorageUnavailableException;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
@@ -35,6 +36,10 @@ final class KeysHandler implements HttpHandler {
         try (exchange) {
             try {
                 route(exchange);
+            } catch (StorageUnavailableException failure) {
+                LOG.log(System.Logger.Level.ERROR, "Persistent store unavailable", failure);
+                if (exchange.getResponseCode() == -1) sendError(exchange, 503, "STORAGE_UNAVAILABLE");
+                else throw failure;
             } catch (RuntimeException failure) {
                 LOG.log(System.Logger.Level.ERROR, "HTTP request failed", failure);
                 if (exchange.getResponseCode() == -1) {
