@@ -1,6 +1,7 @@
 package miniredis.http;
 
 import miniredis.store.KeyValueStore;
+import miniredis.support.MutableClock;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,15 +100,33 @@ class KeyHttpApiTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"30000", "0", "-1", "1.5", "\"30000\"", "null", "true", "{}"})
-    void rejectsTtlRegardlessOfValueWithoutStoringOrOverwriting(String ttl) throws Exception {
+    @ValueSource(strings = {"9223372036854775807", "9223372036854775808", "1.0", "0", "-1", "1.5", "\"30000\"", "null", "true", "{}"})
+    void rejectsInvalidTtlWithoutStoringOrOverwriting(String ttl) throws Exception {
         assertEquals(204, send("PUT", "/keys/existing", "{\"value\":\"old\"}").statusCode());
         String body = "{\"value\":\"new\",\"ttlMs\":" + ttl + "}";
 
-        assertError(400, "TTL_NOT_SUPPORTED", send("PUT", "/keys/existing", body));
+        assertError(400, "INVALID_TTL", send("PUT", "/keys/existing", body));
         assertValue("/keys/existing", "old");
-        assertError(400, "TTL_NOT_SUPPORTED", send("PUT", "/keys/new", body));
+        assertError(400, "INVALID_TTL", send("PUT", "/keys/new", body));
         assertEmptyResponse(404, send("GET", "/keys/new", null));
+    }
+
+    @Test
+    void ttlWorksAtTheExactBoundaryAndOmittingItRemovesTheOldExpiration() throws Exception {
+        server.close();
+        var clock = new MutableClock(1000);
+        server = new MiniRedisHttpServer(new InetSocketAddress("127.0.0.1", 0), new KeyValueStore(1, clock));
+        server.start();
+        baseUri = URI.create("http://127.0.0.1:" + server.port());
+        assertEmptyResponse(204, send("PUT", "/keys/key", "{\"value\":\"\",\"ttlMs\":10}"));
+        clock.set(1009);
+        assertValue("/keys/key", "");
+        clock.set(1010);
+        assertEmptyResponse(404, send("GET", "/keys/key", null));
+        assertEmptyResponse(204, send("PUT", "/keys/key", "{\"value\":\"old\",\"ttlMs\":1}"));
+        assertEmptyResponse(204, send("PUT", "/keys/key", "{\"value\":\"permanent\"}"));
+        clock.set(2000);
+        assertValue("/keys/key", "permanent");
     }
 
     @Test
@@ -172,7 +191,7 @@ class KeyHttpApiTest {
     }
 
     @Test
-    void requestsFromMultipleConnectionsRemainSerialized() throws Exception {
+    void requestsFromMultipleConnectionsShareTheLockedStore() throws Exception {
         List<java.util.concurrent.CompletableFuture<HttpResponse<String>>> requests = new ArrayList<>();
         for (int i = 0; i < 40; i++) {
             var request = HttpRequest.newBuilder(baseUri.resolve("/keys/key" + i))

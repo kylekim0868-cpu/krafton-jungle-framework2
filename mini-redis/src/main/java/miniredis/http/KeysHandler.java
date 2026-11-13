@@ -15,7 +15,7 @@ import java.nio.charset.CodingErrorAction;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-/** HTTP/JSON 계약만 처리한다. 저장소 접근은 서버의 단일 Executor에서 직렬화한다. */
+/** HTTP/JSON 계약만 처리한다. 동시성·TTL은 저장소에서 처리한다. */
 final class KeysHandler implements HttpHandler {
     private static final int MAX_REQUEST_BYTES = 1_048_576;
     private static final String PREFIX = "/keys/";
@@ -109,17 +109,28 @@ final class KeysHandler implements HttpHandler {
             sendError(exchange, 400, "INVALID_REQUEST");
             return;
         }
-        if (root.has("ttlMs")) {
-            sendError(exchange, 400, "TTL_NOT_SUPPORTED");
-            return;
-        }
-        if (root.size() != 1 || !root.has("value") || !root.get("value").isString()) {
+        boolean hasTtl = root.has("ttlMs");
+        if (root.size() != (hasTtl ? 2 : 1) || !root.has("value") || !root.get("value").isString()) {
             sendError(exchange, 400, "INVALID_REQUEST");
             return;
         }
+        if (hasTtl && (!root.get("ttlMs").isIntegralNumber()
+                || !root.get("ttlMs").canConvertToLong() || root.get("ttlMs").longValue() <= 0)) {
+            sendError(exchange, 400, "INVALID_TTL");
+            return;
+        }
 
-        // 전체 본문과 스키마를 확인한 뒤 한 번만 저장한다. 실패한 PUT은 기존 값을 보존한다.
-        store.put(key, root.get("value").stringValue());
+        // 전체 검증이 끝난 뒤 저장한다. 만료 시각 오버플로도 기존 값을 바꾸지 않는다.
+        try {
+            if (hasTtl) {
+                store.put(key, root.get("value").stringValue(), root.get("ttlMs").longValue());
+            } else {
+                store.put(key, root.get("value").stringValue());
+            }
+        } catch (IllegalArgumentException invalidTtl) {
+            sendError(exchange, 400, "INVALID_TTL");
+            return;
+        }
         sendEmpty(exchange, 204);
     }
 

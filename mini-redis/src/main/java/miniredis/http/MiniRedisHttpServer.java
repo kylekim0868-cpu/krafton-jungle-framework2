@@ -10,7 +10,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
-/** 저장소 하나를 공유하는 HTTP 서버. REDIS-02에서는 모든 요청을 직렬 처리한다. */
+/** 저장소 하나를 공유하는 HTTP 서버. 고정 4개 작업 스레드가 저장소의 공통 잠금을 사용한다. */
 public final class MiniRedisHttpServer implements AutoCloseable {
     private final InetSocketAddress address;
     private final KeysHandler handler;
@@ -21,7 +21,7 @@ public final class MiniRedisHttpServer implements AutoCloseable {
     public MiniRedisHttpServer(InetSocketAddress address, KeyValueStore store) {
         this.address = Objects.requireNonNull(address, "address");
         handler = new KeysHandler(Objects.requireNonNull(store, "store"));
-        executor = Executors.newSingleThreadExecutor(Thread.ofPlatform().name("mini-redis-http-", 0).factory());
+        executor = Executors.newFixedThreadPool(4, Thread.ofPlatform().name("mini-redis-http-", 0).factory());
     }
 
     public synchronized void start() throws IOException {
