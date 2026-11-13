@@ -4,11 +4,11 @@ Java로 Mini Redis와 Mini DBMS를 직접 구현하고, 공통 기준으로 검�
 
 ## 현재 상태
 
-0단계 설정은 `ym-mini-redis` / [KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51)에 보존한다. REDIS-01은 설정 커밋 `881be2c`에서 분기한 `feat/KJF-52-ym-hash-table` / [KJF-52](https://kylekim0868.atlassian.net/browse/KJF-52)에서 진행한다. 현재 구현 범위는 버킷 배열·체이닝 기반 메모리 저장소와 JUnit 단위 테스트다.
+0단계 설정은 `ym-mini-redis` / [KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51), REDIS-01 저장소는 `feat/KJF-52-ym-hash-table` / [KJF-52](https://kylekim0868.atlassian.net/browse/KJF-52)에 보존한다. 현재는 REDIS-01 커밋 `c4dabbb`에서 분기·최초 publish한 `feat/KJF-53-ym-http-api` / [KJF-53](https://kylekim0868.atlassian.net/browse/KJF-53)에서 REDIS-02 HTTP API와 실제 클라이언트 테스트를 구현한다.
 
 Mini Redis를 먼저 구현한다. 해시 테이블 → HTTP API → TTL과 동시성 → 상품 API 연동 → 성능 비교 순서로 진행하며, AOF는 선택 기능이다. Mini DBMS는 후속 작업이다.
 
-작업은 **팀원별 요구사항 1개 → Jira 이슈 1개 → 작업 브랜치 1개**로 관리한다. 브랜치 이름은 `<유형>/<이슈키>-<팀원 이니셜>-<작업명>`을 따른다. 기존 `ym-mini-redis`는 설정 요구사항 `REDIS-00` / `KJF-51`에만 사용하며, 이후 요구사항에는 새 전용 브랜치를 만든다. [운영 규칙](TEAM_DEVELOPMENT_RULES.md)과 [요구사항별 연결표](docs/requirements.md#이슈브랜치-연결)를 확인한다.
+작업은 **팀원별 요구사항 1개 → Jira 이슈 1개 → 작업 브랜치 1개 생성 → 즉시 원격 publish·upstream 연결 → 구현·검증** 순서로 진행한다. 브랜치 이름은 `<유형>/<이슈키>-<팀원 이니셜>-<작업명>`을 따른다. 최초 publish는 새 작업 커밋 없이 분기 기준 커밋을 올리는 절차이며, 이후 구현 커밋과 Push는 별도 승인 대상이다. 기존 `ym-mini-redis`는 설정 요구사항 `REDIS-00` / `KJF-51`에만 사용하며, 이후 요구사항에는 새 전용 브랜치를 만든다. [운영 규칙](TEAM_DEVELOPMENT_RULES.md)과 [요구사항별 연결표](docs/requirements.md#이슈브랜치-연결)를 확인한다.
 
 ## 문서 안내
 
@@ -20,6 +20,7 @@ Mini Redis를 먼저 구현한다. 해시 테이블 → HTTP API → TTL과 동�
 | [팀 개발 규칙](TEAM_DEVELOPMENT_RULES.md) | 요구사항·이슈·브랜치 연결, Git·Jira, PR 리뷰와 선별 통합 절차 |
 | [0단계 검증 기록](docs/redis-00-verification.md) | KJF-51 설정 범위, Java·Maven·OMX 검증 결과와 남은 제약 |
 | [REDIS-01 검증 기록](docs/redis-01-verification.md) | 해시 테이블·저장소 API, 사전 할당·리사이즈 설계, 단위 테스트 결과 |
+| [REDIS-02 검증 기록](docs/redis-02-verification.md) | HTTP API·오류 응답·TTL 미지원 정책, 서버 실행과 실제 네트워크 검증 |
 
 ### 기능별 바로가기
 
@@ -39,4 +40,25 @@ cd mini-redis
 ./mvnw test
 ```
 
-REDIS-01의 `./mvnw test`는 저장소와 해시 테이블의 실제 JUnit 테스트를 실행한다. 0단계의 테스트 없는 빌드 설정 확인과 구별한다. HTTP 기능 테스트와 성능 실험은 아직 범위 밖이며, 해당 기능 구현 시 실행 방법·결과를 기록한다.
+`./mvnw test`는 기존 저장소 테스트 33개와 실제 loopback HTTP 테스트 50개를 실행한다. Java 25와 로컬 포트 바인딩 권한이 필요하다. TTL·성능 측정은 아직 범위 밖이다.
+
+### HTTP 서버 실행
+
+Java 25를 가리키는 `JAVA_HOME`이 설정된 셸에서 실행한다. 아래는 macOS/Linux 기준이다.
+
+```sh
+cd mini-redis
+./mvnw compile org.apache.maven.plugins:maven-dependency-plugin:3.11.0:copy-dependencies -DincludeScope=runtime
+"$JAVA_HOME/bin/java" -cp "target/classes:target/dependency/*" miniredis.Main 8080 100000
+```
+
+첫 인자는 포트(0이면 자동 할당), 두 번째는 예상 최대 고유 키 수다. 서버는 `127.0.0.1`에서 실행되며 Ctrl+C로 종료한다. 별도 터미널에서 확인한다.
+
+```sh
+curl -i -X PUT http://127.0.0.1:8080/keys/product:42 -H 'Content-Type: application/json' -d '{"value":"상품 응답"}'
+curl -i http://127.0.0.1:8080/keys/product:42
+curl -i -X DELETE http://127.0.0.1:8080/keys/product:42
+curl -i http://127.0.0.1:8080/keys/product:42
+```
+
+기대 상태 코드는 **204 → 200 → 204 → 404**다. 현재 `ttlMs`를 넣으면 만료를 무시하고 저장하는 대신 `400` / `TTL_NOT_SUPPORTED`로 거절한다.

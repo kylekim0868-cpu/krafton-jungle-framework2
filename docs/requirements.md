@@ -4,7 +4,7 @@
 
 ## 현재 범위와 구현 순서
 
-`ym-mini-redis`는 0단계 설정 브랜치로 보존한다. 현재는 `feat/KJF-52-ym-hash-table`에서 REDIS-01의 메모리 저장소와 단위 테스트까지만 진행한다. 0단계의 main 미병합 상태에서 사용자 합의로 설정 커밋 `881be2c`를 분기 기준으로 사용한다. [아키텍처 문서](architecture.md)에 전체 모듈, 의존 방향, 폴더 구조와 기술 스택을 정리한다. `mini-redis/`는 독립 Maven 프로젝트다. 상품 API와 Mini DBMS 구현·연동은 후속 작업이다.
+`ym-mini-redis`는 0단계 설정, `feat/KJF-52-ym-hash-table`은 REDIS-01 저장소 브랜치로 보존한다. 현재 REDIS-02는 `feat/KJF-53-ym-http-api`에서 진행한다. 선행 구현이 main에 없어 구현 계획의 REDIS-01 커밋 `c4dabbb`를 분기 기준으로 사용하고, 구현 변경 전에 원격 publish와 upstream 연결을 확인했다. [아키텍처 문서](architecture.md)에 전체 모듈, 의존 방향, 폴더 구조와 기술 스택을 정리한다. `mini-redis/`는 독립 Maven 프로젝트다. TTL·다중 처리용 잠금, 상품 API와 Mini DBMS 구현·연동은 후속 작업이다.
 
 | ID | 단계 | 구현 범위 | 완료 기준 |
 |---|---|---|---|
@@ -41,6 +41,8 @@ REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 
 | `DELETE /keys/product:42` | 키를 무효화한다. 이미 없는 키에도 `204`를 반환한다. |
 
 빈 문자열을 값으로 허용한다. `ttlMs`를 주면 양의 정수여야 한다. TTL을 생략해 덮어쓰면 기존 만료 설정을 제거한다. 값 누락, 잘못된 JSON, 유효하지 않은 TTL에는 `400`을 반환한다.
+
+**현재 REDIS-02의 단계별 계약:** 위 TTL 동작은 REDIS-03에서 구현한다. 현재 PUT은 문자열 `value` 하나만 가진 JSON 객체를 허용하며, `ttlMs`가 있으면 값과 무관하게 `400` / `TTL_NOT_SUPPORTED`로 거절한다. 이를 무시하고 영구 저장하지 않는다. 다른 미지원 필드, 값 누락·null·타입 오류, 중복 필드, 뒤에 추가된 JSON도 `400`이며 기존 값을 보존한다. PUT은 `application/json`이 필요하고 요청 본문은 최대 1 MiB다. HTTP 키는 비어 있지 않은 UTF-8 경로 세그먼트 하나로 제한하고, 슬래시·제어 문자·쿼리는 거절한다. 기존 저장소 하나를 단일 HTTP 작업 스레드에서만 접근한다. 상세 응답과 재현 방법은 [REDIS-02 검증 기록](redis-02-verification.md)을 따른다.
 
 ### 상품 API 연동과 무효화
 
@@ -79,7 +81,7 @@ REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 
 
 ## 이슈·브랜치 연결
 
-위 단계 ID 기준으로 설정을 포함한 필수 경로 9개와 선택 1개, 총 10개를 관리한다. **팀원별로 요구사항 하나당 Jira 이슈 하나·작업 브랜치 하나**를 사용한다. 상세 조건과 테스트는 해당 이슈의 완료 체크리스트에 포함한다. 생성·명명·검증·PR 절차는 [팀 개발 규칙](../TEAM_DEVELOPMENT_RULES.md)을 따른다.
+위 단계 ID 기준으로 설정을 포함한 필수 경로 9개와 선택 1개, 총 10개를 관리한다. **팀원별로 요구사항 하나당 Jira 이슈 하나·작업 브랜치 하나**를 사용한다. 승인된 작업 브랜치를 생성하면 구현 변경·새 커밋 전에 즉시 원격 publish와 upstream 연결을 수행하고, 원격 커밋 일치 여부와 브랜치 URL을 확인·기록한다. 상세 조건과 테스트는 해당 이슈의 완료 체크리스트에 포함한다. 생성·명명·publish·검증·PR 절차는 [팀 개발 규칙](../TEAM_DEVELOPMENT_RULES.md)을 따른다.
 
 아래는 YM 작업 연결표다. `미연결`은 이 문서에 실제 키가 아직 연결되지 않았다는 뜻이며 Jira에 이슈가 없다는 뜻은 아니다. 생성 요청 시 기존 이슈부터 확인한다. `미생성`은 이 문서에 확인·기록된 브랜치가 없다는 뜻이다. 다른 팀원은 담당자별 연결표를 따로 유지한다.
 
@@ -87,7 +89,7 @@ REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 
 |---|---|---|
 | REDIS-00 | [KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51) | `ym-mini-redis` (기존 설정 브랜치) |
 | REDIS-01 | [KJF-52](https://kylekim0868.atlassian.net/browse/KJF-52) | `feat/KJF-52-ym-hash-table` |
-| REDIS-02 | 미연결 | 미생성 |
+| REDIS-02 | [KJF-53](https://kylekim0868.atlassian.net/browse/KJF-53) | [`feat/KJF-53-ym-http-api`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-53-ym-http-api) |
 | REDIS-03 | 미연결 | 미생성 |
 | REDIS-04 | 미연결 | 미생성 |
 | REDIS-05 | 미연결 | 미생성 |
@@ -97,3 +99,5 @@ REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 
 | DBMS-03 | 후속 착수 시 연결 | 착수 요청 후 생성 |
 
 `ym-mini-redis`는 REDIS-00에만 사용한다. 이후 브랜치는 `<유형>/<실제 Jira 이슈키>-ym-<작업명>`으로 생성하고 표를 갱신한다. 이슈·브랜치 생성과 전환은 실행 요청 범위 안에서만 수행한다.
+
+REDIS-02의 최초 publish는 `c4dabbbdbd53c8515d47e074a3608a04b2da8961`에서 수행했다. 원격 SHA 일치와 `origin/feat/KJF-53-ym-http-api` upstream을 확인했으며, 이후 HTTP 구현 변경은 별도 요청 전 커밋·Push하지 않는다.
