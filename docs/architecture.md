@@ -25,6 +25,8 @@ Mini DBMS 후속 구성
 
 `MiniRedisHttpServer`는 JDK HttpServer와 고정 4개 작업 스레드를 소유하고 `KeysHandler`에 같은 `KeyValueStore`를 주입한다. HTTP 경계는 JSON·상태 코드만 처리한다. 저장소의 synchronized 메서드가 직접 만든 해시 테이블 엔트리의 값·절대 만료 시각을 함께 보호한다. 조회·만료 판정·삭제는 한 임계영역이다. `Clock`을 주입해 정확한 만료 경계를 테스트하며, TTL 없는 덮어쓰기는 만료를 제거한다. `size()`는 만료 항목을 순회 정리한 유효 키 수다. 백그라운드 만료 스캐너는 없으며 재접근하지 않는 만료 항목은 get/size 때 정리된다. 서버 생성·바인딩은 start 때, 종료 시 서버와 Executor를 정리한다. 고정 스레드 풀의 대기열은 제한하지 않아 운영용 부하 차단은 범위 밖이다.
 
+상품 예제는 같은 Maven 빌드의 `miniredis.product` 패키지이며 [실행 안내](../examples/product-api/README.md)를 둔다. ProductMain과 Mini Redis Main은 별도 JVM이다. ProductOrigin 경계 뒤의 테스트 원본을 향후 DBMS로 교체할 수 있다. HttpKeyCache는 재사용 HttpClient, 전체 응답 deadline, 응답 크기 제한을 적용한다. 캐시 장애는 관찰 가능한 카운터를 늘리고 원본으로 fallback하며 원본 실패는503이다.
+
 선택 기능인 AOF는 저장소의 쓰기 경계에 연결한다. 저장소가 로그 기록·동기화와 메모리 반영 순서를 관리하고, 재시작할 때는 HTTP 요청을 받기 전에 로그를 재생한다.
 
 ## 폴더 구조
