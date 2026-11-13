@@ -1,0 +1,36 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.5'
+    id 'io.spring.dependency-management' version '1.1.6'
+}
+
+group = 'com.miniredis'
+version = '1.0.0'
+
+java {
+    // JDK 17 이상이면 어떤 버전으로도 빌드 가능하도록 17 바이트코드로 컴파일
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // REST API + 내장 Tomcat + Jackson(ObjectMapper) 포함
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // JUnit 5 + MockMvc + AssertJ 포함
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // 테스트 진행 상황을 콘솔에 표시
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
