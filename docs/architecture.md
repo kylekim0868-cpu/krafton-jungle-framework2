@@ -23,6 +23,8 @@ Mini DBMS 후속 구성
 | 상품 API | 캐시를 먼저 조회한다. 미스이면 원본에서 가져온 응답을 캐시에 저장하고 반환한다. 캐시 서버가 중단되면 원본을 조회한다. |
 | Mini DBMS | 원본 레코드를 테이블 파일에 보관한다. 후속 단계에서 파일 기반 SQL 엔진, 메모리 B+ 트리, 스레드 풀 기반 HTTP API 순으로 구현한다. |
 
+REDIS-02의 `MiniRedisHttpServer`는 JDK HttpServer와 단일 작업 스레드를 소유하고, `KeysHandler`에 같은 `KeyValueStore` 하나를 주입한다. 핸들러가 경로·메서드·Jackson JSON 검증 및 응답을 처리하고 저장소는 HTTP/JSON에 의존하지 않는다. 요청을 직렬 처리하므로 REDIS-01 저장소를 변경 없이 재사용한다. 서버 생성·바인딩은 `start()` 때 수행하고 종료 시 서버와 Executor를 함께 정리한다. 저장소를 외부 코드가 실행 중에 직접 변경해서는 안 된다. TTL과 다중 처리용 저장소 잠금은 REDIS-03에서 추가한다.
+
 선택 기능인 AOF는 저장소의 쓰기 경계에 연결한다. 저장소가 로그 기록·동기화와 메모리 반영 순서를 관리하고, 재시작할 때는 HTTP 요청을 받기 전에 로그를 재생한다.
 
 ## 폴더 구조
@@ -38,7 +40,8 @@ Mini DBMS 후속 구성
 │   ├── requirements.md          요구사항과 단계별 완료 기준
 │   ├── architecture.md          모듈 구조와 데이터 흐름
 │   ├── redis-00-verification.md  0단계 설정 검증 결과와 제약
-│   └── redis-01-verification.md  저장소 설계와 단위 테스트 결과
+│   ├── redis-01-verification.md  저장소 설계와 단위 테스트 결과
+│   └── redis-02-verification.md  HTTP API·TTL 미지원 정책·실제 네트워크 검증
 ├── mini-redis/
 │   ├── pom.xml                  0단계 Maven 설정
 │   ├── mvnw, mvnw.cmd           Maven Wrapper
@@ -57,6 +60,6 @@ Mini DBMS 후속 구성
 ## 기술 스택과 실행
 
 - Java 25 LTS와 Maven Wrapper를 사용한다.
-- HTTP 서버는 JDK `HttpServer`, JSON 처리는 Jackson, 테스트는 JUnit을 사용한다.
+- HTTP 서버는 JDK `HttpServer`, JSON 처리는 Jackson 3.3.0, 테스트는 JUnit을 사용한다. `Main`은 포트·예상 키 수를 받아 loopback 주소에서 서버를 실행한다.
 - Maven Wrapper를 구성한 뒤 `mini-redis/`에서 `./mvnw test`를 실행한다. HTTP 기능 테스트는 서버를 기동해 별도 HTTP 클라이언트가 실제 요청과 응답을 확인한다.
 - 상품 API 연동 시 Mini Redis와 상품 API는 독립 프로세스로 실행한다. Mini DBMS 연동 단계에서는 DBMS도 별도 프로세스로 실행한다.
