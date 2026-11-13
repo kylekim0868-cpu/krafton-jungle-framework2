@@ -8,7 +8,7 @@ Java로 Mini Redis와 Mini DBMS를 직접 구현하고, 공통 기준으로 검�
 
 Mini Redis를 먼저 구현한다. 해시 테이블 → HTTP API → TTL과 동시성 → 상품 API 연동 → 성능 비교 순서로 진행하며, AOF는 선택 기능이다. Mini DBMS는 후속 작업이다.
 
-작업은 **팀원별 요구사항 1개 → Jira 이슈 1개 → 작업 브랜치 1개**로 관리한다. 브랜치 이름은 `<유형>/<이슈키>-<팀원 이니셜>-<작업명>`을 따른다. 기존 `ym-mini-redis`는 설정 요구사항 `REDIS-00` / `KJF-51`에만 사용하며, 이후 요구사항에는 새 전용 브랜치를 만든다. [운영 규칙](TEAM_DEVELOPMENT_RULES.md)과 [요구사항별 연결표](docs/requirements.md#이슈브랜치-연결)를 확인한다.
+작업은 **팀원별 요구사항 1개 → Jira 이슈 1개 → 작업 브랜치 1개 생성 → 즉시 원격 publish·upstream 연결 → 구현·검증** 순서로 진행한다. 브랜치 이름은 `<유형>/<이슈키>-<팀원 이니셜>-<작업명>`을 따른다. 최초 publish는 새 작업 커밋 없이 분기 기준 커밋을 올리는 절차이며, 이후 구현 커밋과 Push는 별도 승인 대상이다. 기존 `ym-mini-redis`는 설정 요구사항 `REDIS-00` / `KJF-51`에만 사용하며, 이후 요구사항에는 새 전용 브랜치를 만든다. [운영 규칙](TEAM_DEVELOPMENT_RULES.md)과 [요구사항별 연결표](docs/requirements.md#이슈브랜치-연결)를 확인한다.
 
 ## 문서 안내
 
