@@ -37,7 +37,8 @@ Mini DBMS 후속 구성
 ├── docs/
 │   ├── requirements.md          요구사항과 단계별 완료 기준
 │   ├── architecture.md          모듈 구조와 데이터 흐름
-│   └── redis-00-verification.md  0단계 설정 검증 결과와 제약
+│   ├── redis-00-verification.md  0단계 설정 검증 결과와 제약
+│   └── redis-01-verification.md  저장소 설계와 단위 테스트 결과
 ├── mini-redis/
 │   ├── pom.xml                  0단계 Maven 설정
 │   ├── mvnw, mvnw.cmd           Maven Wrapper
