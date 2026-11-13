@@ -22,6 +22,8 @@ REDIS-00~02 구현은 개인 통합 브랜치에 전달됐으며, 현재 REDIS-0
 
 | [REDIS-03 검증 기록](docs/redis-03-verification.md) | TTL 경계·공통 잠금·다중 HTTP 요청 검증 |
 
+| [REDIS-04 검증 기록](docs/redis-04-verification.md) | 상품 API 캐시 적중·만료·무효화·장애 fallback |
+
 ### 기능별 바로가기
 
 - **Mini Redis**: [구현 단계](docs/requirements.md#현재-범위와-구현-순서) · [필수 동작](docs/requirements.md#mini-redis-필수-동작) · [HTTP API](docs/requirements.md#외부-http-api)
@@ -62,3 +64,7 @@ curl -i http://127.0.0.1:8080/keys/product:42
 ```
 
 기대 상태 코드는 **204 → 200 → 204 → 404**다. `ttlMs`는 선택적인 양의 정수이며, 생략한 덮어쓰기는 이전 만료를 제거한다. 잘못된 TTL은 `400 INVALID_TTL`이다.
+
+### 상품 API
+
+[별도 JVM 실행과 HTTP 검증](examples/product-api/README.md)을 따른다. 테스트 원본을 사용하는 예제로 Mini DBMS나 운영 서비스는 아니다.
