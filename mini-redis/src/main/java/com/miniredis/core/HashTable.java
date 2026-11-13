@@ -21,6 +21,9 @@ public class HashTable {
     /** 기본 초기 버킷 수 */
     public static final int DEFAULT_CAPACITY = 16;
 
+    /** 적재율 임계값: size / capacity 가 이 값을 "초과"하면 2배로 리사이징 */
+    public static final double LOAD_FACTOR_THRESHOLD = 0.75;
+
     /** 만료 없음을 의미하는 expireAt 값 */
     public static final long NO_EXPIRY = -1L;
 
@@ -81,6 +84,9 @@ public class HashTable {
     /** 현재 버킷 배열 크기 */
     private int capacity;
 
+    /** 지금까지 수행된 리사이징 횟수 (시각화/통계용) */
+    private int resizeCount;
+
     public HashTable() {
         this(DEFAULT_CAPACITY);
     }
@@ -114,8 +120,12 @@ public class HashTable {
      *   <li>capacity 로 나눈 나머지 → 0 ~ capacity-1 범위의 버킷 인덱스.</li>
      * </ol>
      */
+    private int hash(String key, int cap) {
+        return (key.hashCode() & 0x7FFFFFFF) % cap;
+    }
+
     private int hash(String key) {
-        return (key.hashCode() & 0x7FFFFFFF) % capacity;
+        return hash(key, capacity);
     }
 
     // =====================================================================
@@ -157,6 +167,11 @@ public class HashTable {
         //    새 노드.next = 기존 head → buckets[index] = 새 노드
         buckets[index] = new Entry<>(key, value, expireAt, buckets[index]);
         size++;
+
+        // 3) 적재율이 0.75 를 "초과"하면 버킷 배열을 2배로 확장
+        if ((double) size / capacity > LOAD_FACTOR_THRESHOLD) {
+            resize(capacity * 2);
+        }
     }
 
     /** 조회. 키가 없으면 null */
@@ -256,6 +271,51 @@ public class HashTable {
 
     public int capacity() {
         return capacity;
+    }
+
+    public int resizeCount() {
+        return resizeCount;
+    }
+
+    // =====================================================================
+    // 동적 리사이징 (Rehashing)
+    // =====================================================================
+
+    /**
+     * 버킷 배열을 newCapacity 크기로 확장하고 모든 엔트리를 재해싱한다.
+     *
+     * <p>capacity 가 바뀌면 hash(key) = (hashCode & 0x7FFFFFFF) % capacity 결과도 바뀌므로
+     * 기존 노드를 전부 새 배열의 올바른 위치로 옮겨야 한다.
+     * 새 Entry 객체를 만들지 않고 기존 노드의 next 포인터만 재연결(relink)하여 메모리 할당을 줄인다.
+     * 재해싱 도중 이미 만료된 엔트리는 옮기지 않고 버린다(덤으로 정리).</p>
+     */
+    private void resize(int newCapacity) {
+        Entry<String, Object>[] oldBuckets = buckets;
+        Entry<String, Object>[] newBuckets = newBucketArray(newCapacity);
+        long now = System.currentTimeMillis();
+        int newSize = 0;
+
+        for (Entry<String, Object> head : oldBuckets) {
+            Entry<String, Object> node = head;
+            while (node != null) {
+                Entry<String, Object> next = node.next; // 재연결 전에 다음 노드 보관
+                if (!node.isExpired(now)) {
+                    int newIndex = hash(node.key, newCapacity);
+                    // 새 버킷의 head 로 삽입
+                    node.next = newBuckets[newIndex];
+                    newBuckets[newIndex] = node;
+                    newSize++;
+                } else {
+                    node.next = null;
+                }
+                node = next;
+            }
+        }
+
+        this.buckets = newBuckets;
+        this.capacity = newCapacity;
+        this.size = newSize;
+        this.resizeCount++;
     }
 
     // =====================================================================

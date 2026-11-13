@@ -93,6 +93,37 @@ class HashTableTest {
     }
 
     @Test
+    @DisplayName("5. 동적 리사이징: 초기 용량보다 많이 넣어도 유실 없이 조회")
+    void rehashingKeepsAllData() {
+        HashTable table = new HashTable(4);
+        int n = 10_000;
+        for (int i = 0; i < n; i++) {
+            table.put("key-" + i, i, 0);
+        }
+
+        assertThat(table.capacity()).isGreaterThan(4);
+        assertThat(table.resizeCount()).isGreaterThan(0);
+        // 적재율이 0.75 이하로 유지되어야 함
+        assertThat((double) table.rawSize() / table.capacity()).isLessThanOrEqualTo(0.75);
+        assertThat(table.size()).isEqualTo(n);
+        for (int i = 0; i < n; i++) {
+            assertThat(table.get("key-" + i)).isEqualTo(i);
+        }
+    }
+
+    @Test
+    @DisplayName("5-1. 적재율 0.75 '초과' 시점에 정확히 2배 확장")
+    void resizeExactlyWhenLoadFactorExceeded() {
+        HashTable table = new HashTable(4);
+        table.put("a", 1, 0);
+        table.put("b", 2, 0);
+        table.put("c", 3, 0);           // 3/4 = 0.75 → 초과 아님
+        assertThat(table.capacity()).isEqualTo(4);
+        table.put("d", 4, 0);           // 4/4 = 1.0 > 0.75 → 8 로 확장
+        assertThat(table.capacity()).isEqualTo(8);
+    }
+
+    @Test
     @DisplayName("6. clear() 후 size() == 0")
     void clearEmptiesTable() {
         HashTable table = new HashTable();
