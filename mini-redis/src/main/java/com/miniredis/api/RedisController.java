@@ -14,8 +14,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -30,11 +32,19 @@ import java.util.Map;
  *  GET    /api/redis            전체 목록 + 통계 + 버킷 분포
  *  DELETE /api/redis            전체 초기화(FLUSH)
  *  POST   /api/redis/save       RDB 스냅샷 수동 저장
+ *  GET    /api/slow-db?id=..    캐시 성능 비교 Mock
  * </pre>
  */
 @RestController
 @RequestMapping("/api")
 public class RedisController {
+
+    /** slow-db 캐시 키 접두사 */
+    static final String SLOW_DB_PREFIX = "slow-db:";
+    /** slow-db 캐시 TTL(초) */
+    static final int SLOW_DB_TTL = 30;
+    /** DB 지연 시뮬레이션(ms) */
+    static final long SLOW_DB_DELAY_MS = 500;
 
     private final ConcurrentHashMap store;
     private final TTLManager ttlManager;
@@ -156,6 +166,52 @@ public class RedisController {
         body.put("count", count);
         body.put("file", rdbManager.getRdbFile().getFileName().toString());
         return ResponseEntity.ok(body);
+    }
+
+    // =====================================================================
+    // 캐시 성능 비교 Mock (Cache-Aside 패턴)
+    // =====================================================================
+
+    /**
+     * 1) 캐시 조회 → Hit 이면 즉시 반환
+     * 2) Miss 이면 느린 DB(500ms) 조회 → 결과를 TTL 30초로 캐싱 → 반환
+     */
+    @GetMapping("/slow-db")
+    public ResponseEntity<Map<String, Object>> slowDb(@RequestParam("id") String id) throws InterruptedException {
+        long start = System.nanoTime();
+        String cacheKey = SLOW_DB_PREFIX + id;
+
+        Object cached = store.get(cacheKey);
+        boolean hit = cached != null;
+        Object data;
+        if (hit) {
+            data = cached;
+        } else {
+            data = queryFromSlowDatabase(id);
+            setAndLog(cacheKey, data, SLOW_DB_TTL);
+        }
+
+        long elapsedNanos = System.nanoTime() - start;
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("id", id);
+        body.put("data", data);
+        body.put("cached", hit);
+        body.put("elapsed", elapsedNanos / 1_000_000);                          // ms (정수)
+        body.put("elapsedMs", Math.round(elapsedNanos / 1_000.0) / 1_000.0);    // ms (소수 3자리)
+        body.put("cacheKey", cacheKey);
+        body.put("ttl", SLOW_DB_TTL);
+        return ResponseEntity.ok(body);
+    }
+
+    /** 느린 RDBMS 조회를 흉내내는 Mock */
+    private Map<String, Object> queryFromSlowDatabase(String id) throws InterruptedException {
+        Thread.sleep(SLOW_DB_DELAY_MS);
+        Map<String, Object> row = new LinkedHashMap<>();
+        row.put("id", id);
+        row.put("name", "User-" + id);
+        row.put("email", id + "@example.com");
+        row.put("fetchedAt", Instant.now().toString());
+        return row;
     }
 
     // =====================================================================
