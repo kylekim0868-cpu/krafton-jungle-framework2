@@ -3,7 +3,7 @@
 ```text
 SQL 파일 → CLI Main ─┐
                      ├→ SqlParser → SqlStatement → SqlEngine → Database → TableFile(products.jsonl)
-후속 POST /query ────┘                                         └→ B+ 트리(id → 바이트 위치/길이)
+POST /query ────┘                                         └→ B+ 트리(id → 바이트 위치/길이)
 ```
 
 SQL 문법·정적 스키마 검증은 직접 작성한 SqlParser, 실행 순서는 SqlEngine, 파일/ID/잠금 생명주기는 Database, JSON Lines 바이트 처리는 TableFile이 담당한다. HTTP/CLI는 저장 형식이나 인덱스를 직접 만지지 않는다. Product는 고정 레코드, QueryResult는 INSERT affectedRows/insertedId 또는 SELECT rows를 JSON으로 전달한다.
@@ -30,7 +30,15 @@ Database의 공통 모니터가 명령 하나의 ID 발급/파일 변경을 보�
 ## 프로젝트
 
 - mini-dbms: 독립 Java25 Maven 프로젝트, 같은 버전의 기존 Redis 빌드 도구 재사용.
-- src/main/java/minidbms: SQL/파일/CLI, 후속 index/http/benchmark.
-- src/test/java/minidbms: 파서·파일·별도 JVM, 후속 인덱스/실제 HTTP.
+- src/main/java/minidbms: SQL/파일/CLI, index/http/benchmark.
+- src/test/java/minidbms: 파서·파일·별도 JVM, 인덱스/실제 HTTP.
 - docs: 단계별 완료 기준과 검증·측정 기록.
 - 데이터/target은 Git에 포함하지 않는다. 기존 Redis 작업공간/소스는 이 worktree에 복사하지 않는다.
+
+## HTTP 실행과 한계
+
+HttpMain은 Database 생명주기를 소유하고, QueryHttpServer는 HTTP/작업스레드만 소유한다. 서버 시작 전에 DB검증·인덱스구축을 마치며, 정상 종료는 서버/worker 종료 후 DB.force/close 순서다. 포트/입력 설정 오류는 파일을 열기 전에 검증하고, 시작 실패 시 자원을 반환한다.
+
+QueryHttpServer는 엄격 UTF8/JSON→단일SQL변환→SqlEngine.executeOne→QueryResult JSON을 담당한다. QueryLimits를 Database에 전달해 조회 중 행수/보수적바이트예산을 확인한다. 예산 초과는 읽기 전용 오류이며 파일/인덱스를 변경하지 않는다. CLI는 같은 엔진에 무제한 예산을 사용한다. 저장소 실패는 원인 로그+503, 예상 외 오류는 원인 로그+500으로 보내며 이미 응답 중이면 예외를 전파한다.
+
+공통 모니터는 단순한 단일프로세스 일관성 선택이다. 같은 프로세스에서 외부 HTTP 요청은 병렬 도착하지만 DB작업은 명령 단위로 직렬화된다. 장시간 스캔 동안 쓰기도 대기한다. 고정8개 스레드의 대기열은 무제한이며 Slow-client/CPU쿼리 제한은 없다. 대량 결과는 HTTP예산으로 메모리 사용을 제한하지만 운영준비 상태를 뜻하지 않는다.

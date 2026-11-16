@@ -2,13 +2,15 @@
 
 사용자 요청은 기존 Redis 과정과 같이 Mini DBMS 전체를 순서대로 구현·검증·커밋·Push·PR 전달하는 것이다. Redis 소스는 수정하지 않는다. 사용자 제공 개인 기준 브랜치는 `ym-mini-dbms`, Jira 에픽은 [KJF-58](https://kylekim0868.atlassian.net/browse/KJF-58)이다. 처음 기준은 `c5381b323311e6738fc0f48afefd397ba0db3e2d`이다. main은 변경하지 않고, PR 병합과 Jira 완료 전환은 별도 요청/팀 절차다.
 
-## 단계
+## 현재 범위와 구현 순서
 
 | ID | 요구사항 | 완료 기준 | Jira | 브랜치 |
 |---|---|---|---|---|
 | DBMS-01 | 직접 구현한 SQL 처리기·테이블 파일·CLI | INSERT 성공 후 새 JVM SELECT로 같은 행 조회, 파서/파일/오류 검증 | [KJF-59](https://kylekim0868.atlassian.net/browse/KJF-59) | `feat/KJF-59-ym-sql-file` |
 | DBMS-02 | 직접 구현한 메모리 B+ 트리 ID 인덱스 | leaf/internal/root 분할, 재구축, 100만건 이상 삽입 후 ID조회·비인덱스 검색 실측 | [KJF-60](https://kylekim0868.atlassian.net/browse/KJF-60) | `feat/KJF-60-ym-bplus-index` |
-| DBMS-03 | HTTP API와 저장소 동시성 | 실제 병렬 HTTP INSERT에서 ID 중복 없이 파일·인덱스 일치, 재시작 후 보존 | [KJF-61](https://kylekim0868.atlassian.net/browse/KJF-61) | 선행 단계 검증 후 생성 |
+| DBMS-03 | HTTP API와 저장소 동시성 | 실제 병렬 HTTP INSERT에서 ID 중복 없이 파일·인덱스 일치, 재시작 후 보존 | [KJF-61](https://kylekim0868.atlassian.net/browse/KJF-61) | `feat/KJF-61-ym-http-concurrency` |
+
+## 이슈·브랜치 연결
 
 요구사항 하나에 Task 하나·브랜치 하나를 사용한다. 새 브랜치는 구현 전에 즉시 publish하고 원격 SHA/upstream을 검증한다. 이후 단계는 이전 단계의 검증 커밋에서 분기한다. 첫 PR은 ym-mini-dbms, 이후 PR은 직전 단계 브랜치를 대상으로 한다.
 
@@ -51,3 +53,13 @@ FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 
 - 실험은 새 디렉터리에100만행 삽입·정상 close 후 다시 열어 재구축한 뒤 동일20개 키·각조건 워밍업3회·단일스레드·동일행/컬럼/응답으로 ID검색과name검색을 교대 측정한다. 각 쿼리는 LIMIT1이며 선형탐색은 첫 일치까지 읽는다. JVM heap512MiB, 원시 ns 지연과p50/p95·동작시간합 기반처리량 기록. 다른 필드/접근방식 비교이며 동일 쿼리 계획 비교·운영 성능 보장이 아니다.
 
 [DBMS-02 검증·100만행 실제 측정 기록](dbms-02-verification.md). 교정 후 새 데이터 디렉터리에서 재측정하고 별도 JVM 조회까지 검증했다.
+
+## DBMS-03 HTTP 계약
+
+- JDK HttpServer, loopback, 고정8개 요청 스레드가 같은 SqlEngine/Database를 공유한다. Database의 공통 모니터 안에서 ID발급·파일append·B+트리반영·ID증가를 직렬화한다. 파일/인덱스 조회도 같은 경계를 사용해 중간 상태가 보이지 않는다.
+- `POST /query`, `Content-Type: application/json`, UTF8 JSON 객체 `{"sql":"SELECT * FROM products WHERE id=1;"}`. SQL은 정확히 한 명령만 허용하며 여러 명령은 실행 전에400으로 거절한다. CLI의 다중 명령 지원은 유지한다.
+- 정상 INSERT/SELECT 모두200과 QueryResult(command/affectedRows/insertedId/rows/accessPath). 없는 ID는200/rows[].
+- 잘못된 JSON·UTF8·sql필드/추가필드/중복필드/추가JSON은400 INVALID_REQUEST. SQL문법·미지원·여러명령은400 INVALID_SQL. 잘못된경로404, 메서드405/Allow POST, 미디어타입415, 본문1MiB초과413 REQUEST_TOO_LARGE. 잘린 HTTP본문의 전송 오류는400 REQUEST_READ_FAILED(연결이 살아있을 때)이며 DB를 고장 상태로 바꾸지 않는다.
+- HTTP결과는 최대1000행, 완전한 저장 행 바이트 합의 보수적 예산(4MiB-8192)으로 제한한다. 작은 projection도 전체 행 크기로 계산한다. 초과하면413 RESULT_TOO_LARGE이며 조용히 잘라서 반환하지 않는다. SQL LIMIT 또는 좁은 WHERE로 줄일 수 있다. CLI는 이 HTTP예산을 적용하지 않는다.
+- 결과 예산은 읽는 동안 검사해 무제한 행을 메모리에 모으지 않는다. 최종JSON도4MiB를 검사한다. 저장소 I/O 실패 이후는503 STORAGE_UNAVAILABLE, 이후 읽기/쓰기 모두 차단하고 재시작 검증을 요구한다.
+- INSERT 응답이 유실되거나 연결이 끊어져도 이미 append됐을 수 있다. 요청ID/멱등성/다중명령트랜잭션은 없다. loopback예제이며 인증/TLS/부하차단/쿼리기한/운영제어는 범위 밖이다.
