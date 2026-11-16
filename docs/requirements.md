@@ -7,7 +7,7 @@
 | ID | 요구사항 | 완료 기준 | Jira | 브랜치 |
 |---|---|---|---|---|
 | DBMS-01 | 직접 구현한 SQL 처리기·테이블 파일·CLI | INSERT 성공 후 새 JVM SELECT로 같은 행 조회, 파서/파일/오류 검증 | [KJF-59](https://kylekim0868.atlassian.net/browse/KJF-59) | `feat/KJF-59-ym-sql-file` |
-| DBMS-02 | 직접 구현한 메모리 B+ 트리 ID 인덱스 | leaf/internal/root 분할, 재구축, 100만건 이상 삽입 후 ID조회·비인덱스 검색 실측 | [KJF-60](https://kylekim0868.atlassian.net/browse/KJF-60) | 선행 단계 검증 후 생성 |
+| DBMS-02 | 직접 구현한 메모리 B+ 트리 ID 인덱스 | leaf/internal/root 분할, 재구축, 100만건 이상 삽입 후 ID조회·비인덱스 검색 실측 | [KJF-60](https://kylekim0868.atlassian.net/browse/KJF-60) | `feat/KJF-60-ym-bplus-index` |
 | DBMS-03 | HTTP API와 저장소 동시성 | 실제 병렬 HTTP INSERT에서 ID 중복 없이 파일·인덱스 일치, 재시작 후 보존 | [KJF-61](https://kylekim0868.atlassian.net/browse/KJF-61) | 선행 단계 검증 후 생성 |
 
 요구사항 하나에 Task 하나·브랜치 하나를 사용한다. 새 브랜치는 구현 전에 즉시 publish하고 원격 SHA/upstream을 검증한다. 이후 단계는 이전 단계의 검증 커밋에서 분기한다. 첫 PR은 ym-mini-dbms, 이후 PR은 직전 단계 브랜치를 대상으로 한다.
@@ -42,3 +42,12 @@ Java25, Jackson3.3.0, JUnit5.13.4, MavenWrapper를 사용한다. `mini-dbms/`에
 FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 INSERT fsync/WAL/전원 장애 원자성은 보장하지 않는다. 부분 쓰기/손상된 행/잘린 마지막 행은 자동 삭제하지 않고 재개를 거절한다. 데이터 디렉터리는 한 프로세스가 소유하며, 활성 파일을 외부에서 수정/교체하지 않는다.
 
 [아키텍처](architecture.md) · [팀 규칙](../TEAM_DEVELOPMENT_RULES.md) · [DBMS-01 검증](dbms-01-verification.md)
+
+## DBMS-02 인덱스 계약
+
+- maxKeys 기본63인 직접 B+ 트리를 사용한다(최적 설정이라는 주장은 아님). 키 long/값 행 포인터, leaf만 실제 값을 저장하며 leaf간 next 연결을 유지한다. full leaf/internal/root 분할과 중복키 덮어쓰기를 지원한다. 행 삭제가 없어 트리 삭제/병합은 범위 밖이다.
+- `WHERE id = 정수`는 PRIMARY_KEY_INDEX로 포인터 위치를 읽고, name/price/조건 없는 조회는 TABLE_SCAN이다. QueryResult에 accessPath(APPEND/PRIMARY_KEY_INDEX/TABLE_SCAN)를 추가해 실제 경로를 관찰한다.
+- 인덱스는 디스크에 별도 저장하지 않는다. 매 시작 시 검증한 JSONL에서 구축하며 INSERT의 파일 append·인덱스 반영·ID 증가를 같은 모니터로 보호한다. 파일은 추가됐으나 인덱스 반영이 실패하면 이후 명령을 거절하고 재시작 검증이 필요하다.
+- 실험은 새 디렉터리에100만행 삽입·정상 close 후 다시 열어 재구축한 뒤 동일20개 키·각조건 워밍업3회·단일스레드·동일행/컬럼/응답으로 ID검색과name검색을 교대 측정한다. 각 쿼리는 LIMIT1이며 선형탐색은 첫 일치까지 읽는다. JVM heap512MiB, 원시 ns 지연과p50/p95·동작시간합 기반처리량 기록. 다른 필드/접근방식 비교이며 동일 쿼리 계획 비교·운영 성능 보장이 아니다.
+
+[DBMS-02 검증·100만행 실제 측정 기록](dbms-02-verification.md). 교정 후 새 데이터 디렉터리에서 재측정하고 별도 JVM 조회까지 검증했다.
