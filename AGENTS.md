@@ -1,9 +1,12 @@
-# Mini DBMS 작업 지침
+# Mini Redis · Mini DBMS 공통 작업 지침
 
-- 사용자 요청 범위는 DBMS-01 → DBMS-02 → DBMS-03이다. [요구사항](docs/requirements.md), [아키텍처](docs/architecture.md), [팀 규칙](TEAM_DEVELOPMENT_RULES.md)을 따른다.
-- Java25, 독립 mini-dbms Maven Wrapper를 사용한다. SQL 파서와 메모리 B+ 트리는 직접 구현한다. JSON/HTTP/테스트는 기존 설계의 Jackson/JDK HttpServer/JUnit을 사용한다.
-- 최초 기준은 사용자가 생성한 origin/ym-mini-dbms c5381b3이다. Jira 에픽 KJF-58 아래 요구사항별 Task·브랜치를 하나씩 연결한다. 새 브랜치는 구현 전 즉시 publish하고 upstream/원격 SHA를 검증한다.
-- 이번 일괄 요청은 각 단계 구현·검증 후 커밋·Push·PR까지 포함한다. 첫 PR은 ym-mini-dbms, 이후 PR은 직전 검증 단계 브랜치를 대상으로 한다. 자동 승인·병합·Jira 완료 전환은 하지 않는다.
-- Redis 작업공간과 소스는 수정하지 않는다. 현재 DBMS는 별도 worktree에서 구현한다. main·다른 팀원 브랜치는 변경하지 않는다. Force Push/Hard Reset/무관한 변경 폐기는 금지한다.
-- mini-dbms/에서 ./mvnw test로 검증한다. CLI는 실제 다른 JVM, HTTP는 실제 클라이언트로 확인한다. 100만건 인덱스 성능은 실제 측정하고 p50/p95/처리량·조건·원본값을 기록한다.
-- 필수 계약과 설계 선택, 저장 형식·지원 SQL·동시성·장애 한계를 한국어 문서/테스트에 남긴다. 신규 범위나 파괴적 작업만 확인하고, 이미 요청된 안전한 작업은 끝까지 진행한다.
+- 구현 전 해당 모듈의 요구사항·아키텍처·코드·테스트를 읽는다. Redis는 [요구사항](docs/mini-redis/requirements.md)·[아키텍처](docs/mini-redis/architecture.md), DBMS는 [요구사항](docs/mini-dbms/requirements.md)·[아키텍처](docs/mini-dbms/architecture.md)를 따른다.
+- 두 프로젝트는 같은 저장소의 독립 Maven 프로젝트다. Java 25를 사용하며 Redis 해시 테이블, DBMS SQL 처리기·B+ 트리는 직접 구현한다. HTTP/JSON/빌드/테스트에는 각 설계의 도구를 사용한다.
+- 기능·설계·실행·검증 문서는 해당 모듈의 `docs/mini-redis/` 또는 `docs/mini-dbms/`에만 관리한다. 루트 문서에는 공통 정책과 탐색 링크만 두며 API 계약을 중복 작성하지 않는다.
+- 현재 요청은 두 구현의 동일 작업 폴더 배치, 문서 분리, 독립 테스트 검증 결과를 `ym-mini-dbms`에 반영하는 것이다. 사용자가 이번 통합의 커밋·Push·대상 PR 병합을 요청했다. 실제 Redis–DBMS 연동과 통합 테스트는 제외한다. 기존 사용자의 Redis 미커밋 변경 4개는 통합 커밋에서 제외하고 보존한다. main·다른 팀원 브랜치·Jira 상태는 변경하지 않는다.
+- 각 모듈에서 `./mvnw test`로 검증한다. 루트에서는 `(cd mini-redis && ./mvnw test)`와 `(cd mini-dbms && ./mvnw test)`를 각각 실행한다. 포트·데이터·target을 모듈별로 분리하며 상대 모듈의 서버 실행을 요구하지 않는다.
+- 필수 동작과 개인 설계 선택을 구분하고, API·동시성·저장 형식 변경의 이유와 영향을 해당 모듈 문서와 테스트에 남긴다. 통과·실패·미실행을 구분하며 성능 수치는 실제 측정값만 사용한다.
+- [팀 개발 규칙](TEAM_DEVELOPMENT_RULES.md)에 따라 새 구현은 팀원별 요구사항 ID 하나에 실제 Jira 이슈 하나·전용 브랜치 하나를 연결한다. 기존 연결을 먼저 확인하고, 승인된 새 작업 브랜치는 구현·새 커밋 전 즉시 publish하여 upstream·원격 SHA를 확인한다. 문서·계획 요청만으로 이슈·브랜치를 생성하지 않는다.
+- `ym-mini-redis`는 Redis 구현만 유지하고 이번 통합 결과를 역으로 병합하지 않는다. `ym-mini-dbms`에는 mini-redis와 mini-dbms 두 독립 모듈을 포함한다.
+- main과 다른 팀원의 브랜치를 변경하지 않고 Force Push·Hard Reset·무관한 변경 폐기를 하지 않는다. 커밋·Push·PR·병합은 사용자의 명시적 요청 범위와 팀 규칙을 따른다.
+- 답변과 주요 설계 설명은 한국어로 작성한다. 기본적으로 한 세션에서 구현·검증하며 불필요한 병렬 에이전트 작업은 시작하지 않는다.

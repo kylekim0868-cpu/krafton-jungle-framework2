@@ -1,3 +1,19 @@
 .omx/
+.omx-state-locks/
+.omx-state-locks.identity.json
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+/mini-redis/target/
+
+# Local Mini Redis AOF data (never commit runtime logs)
+/mini-redis/data/
+
+# Independent Mini DBMS build output and runtime tables
 /mini-dbms/target/
 /mini-dbms/data/

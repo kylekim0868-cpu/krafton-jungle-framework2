@@ -1,36 +1,30 @@
-# Mini DBMS 아키텍처
+# 공통 프로젝트 구조
+
+같은 저장소 안에서 Mini Redis와 Mini DBMS를 **별도 Maven 프로젝트**로 관리한다. 루트 부모 POM, 상호 소스 의존성, 공유 데이터 파일은 없다.
+
+| 경계 | Mini Redis | Mini DBMS |
+|---|---|---|
+| 소스·테스트·빌드 | `mini-redis/` | `mini-dbms/` |
+| 문서·벤치마크 기록 | `docs/mini-redis/` | `docs/mini-dbms/` |
+| 런타임 데이터 예시 | `mini-redis/data/store.aof` | `mini-dbms/data/products.jsonl` |
+| 서버 포트 예시 | 8080 (상품 예제 8081) | 8090 |
+| 모듈 설계 | [Redis 아키텍처](mini-redis/architecture.md) | [DBMS 아키텍처](mini-dbms/architecture.md) |
+
+각 모듈의 Maven Wrapper·pom.xml·target·테스트 데이터를 분리한다. 테스트 서버는 임시 loopback 포트와 임시 디렉터리를 사용하고 테스트 종료 시 닫는다. 실행/테스트 명령은 [루트 README](../README.md#독립-테스트)와 각 모듈 README를 따른다.
+
+## 브랜치 경계
+
+`ym-mini-redis`는 Redis 구현만 포함한다. 이 문서의 두 모듈 구조는 `ym-mini-dbms`의 개인 통합 결과다. DBMS 추가를 Redis 전용 브랜치로 역병합하지 않으며 main은 변경하지 않는다.
+
+## 현재 데이터 흐름
 
 ```text
-SQL 파일 → CLI Main ─┐
-                     ├→ SqlParser → SqlStatement → SqlEngine → Database → TableFile(products.jsonl)
-후속 POST /query ────┘                                         └→ 후속 B+ 트리(id → 바이트 위치/길이)
+클라이언트 → Redis HTTP → 해시 테이블 / 선택 AOF
+클라이언트 → 상품 API → Redis 캐시 / 테스트용 원본
+
+SQL 파일 → DBMS CLI ─┐
+                     ├→ SQL 엔진 → JSONL 테이블 / B+ 트리
+클라이언트 → DBMS HTTP┘
 ```
 
-SQL 문법·정적 스키마 검증은 직접 작성한 SqlParser, 실행 순서는 SqlEngine, 파일/ID/잠금 생명주기는 Database, JSON Lines 바이트 처리는 TableFile이 담당한다. HTTP/CLI는 저장 형식이나 인덱스를 직접 만지지 않는다. Product는 고정 레코드, QueryResult는 INSERT affectedRows/insertedId 또는 SELECT rows를 JSON으로 전달한다.
-
-## 파일 형식
-
-데이터 디렉터리에는 `.minidbms.lock`(소유권)과 `products.jsonl`(테이블)이 있다. UTF-8 JSON 객체 하나와 LF가 행 하나다. JSON 내부의 개행은 이스케이프되므로 물리적 한 줄을 유지한다.
-
-```json
-{"id":1,"name":"사과🍎","price":1200}
-{"id":2,"name":"","price":0}
-```
-
-필드는 정확히 id/name/price이며 타입·값·중복 필드를 검증한다. 시작 시 모든 행과 증가 ID를 확인해 다음 ID를 복원한다. 행 포인터는 LF를 제외한 `(바이트 오프셋, JSON 바이트 길이)`이고 Unicode 문자 수가 아니다. 버퍼 순회로 전체 스캔하고, 포인터 조회는 FileChannel 위치 읽기를 사용한다.
-
-각 행은 부분쓰기를 반복해 끝까지 append한다. 정상 종료에서 force(true), 실패하면 추가 쓰기를 차단한다. 자동 tail repair/트랜잭션/WAL은 없다. 정상 종료 사이의 다른 프로세스 조회를 검증하지만 전원 장애·디스크 고장 보장은 아니다.
-
-## 소유권·동시성 경계
-
-DirectoryLock은 JVM registry로 같은 실제 잠금 파일의 중복 개방을 채널 생성 전에 거절하고 OS FileLock으로 다른 프로세스를 막는다. 잠금 파일과 테이블 채널을 분리해 테이블 스캔 채널 종료가 소유권 잠금을 풀지 않게 한다. 신뢰된 로컬 디렉터리, 활성 파일 외부 rename/unlink/직접 쓰기 금지 전제다.
-
-Database의 공통 모니터가 명령 하나의 ID 발급/파일 변경을 보호한다. 이후 인덱스 반영도 같은 경계에서 수행한다. 다중 SELECT/INSERT의 SQL파일 전체 트랜잭션은 아니다. B+ 트리는 메모리 전용으로 파일을 진실 원천으로 삼아 시작 시 재구축한다. HTTP 스레드 풀은 같은 엔진/Database 인스턴스를 공유한다.
-
-## 프로젝트
-
-- mini-dbms: 독립 Java25 Maven 프로젝트, 같은 버전의 기존 Redis 빌드 도구 재사용.
-- src/main/java/minidbms: SQL/파일/CLI, 후속 index/http/benchmark.
-- src/test/java/minidbms: 파서·파일·별도 JVM, 후속 인덱스/실제 HTTP.
-- docs: 단계별 완료 기준과 검증·측정 기록.
-- 데이터/target은 Git에 포함하지 않는다. 기존 Redis 작업공간/소스는 이 worktree에 복사하지 않는다.
+**상품 API와 DBMS는 아직 연결하지 않는다.** DBMS를 실제 원본으로 쓰는 어댑터·세 서버 통합 테스트는 별도 범위다. 두 프로젝트가 같은 폴더에 있다는 사실과 실제 런타임 연동은 구분한다.
