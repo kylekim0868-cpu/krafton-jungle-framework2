@@ -16,11 +16,19 @@ final class TableFile implements AutoCloseable {
     private static final int MAX_ROW = 1_048_576;
     private static final JsonMapper JSON = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
             DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY).build();
+    @FunctionalInterface interface Writer { int write(FileChannel channel, ByteBuffer bytes) throws IOException; }
+    private final Writer writer;
     private final Path path;
     private final FileChannel channel;
     private boolean failed;
 
-    TableFile(Path path) throws IOException { this.path = path; channel = FileChannel.open(path, CREATE, READ, WRITE); }
+    TableFile(Path path) throws IOException { this(path, FileChannel::write); }
+    TableFile(Path path, Writer writer) throws IOException {
+        this.writer = java.util.Objects.requireNonNull(writer);
+        this.path = path;
+        channel = FileChannel.open(path, CREATE, READ, WRITE);
+    }
+    boolean writesFailed() { return failed; }
 
     Pointer append(Product product) throws IOException {
         if (failed) throw new IOException("table writes disabled after I/O failure");
@@ -28,11 +36,12 @@ final class TableFile implements AutoCloseable {
         if (payload.length > MAX_ROW) throw new IllegalArgumentException("row exceeds 1 MiB");
         long offset = channel.size();
         var bytes = ByteBuffer.allocate(payload.length + 1).put(payload).put((byte) '\n').flip();
-        try {
-            channel.position(offset);
-            while (bytes.hasRemaining()) if (channel.write(bytes) <= 0) throw new IOException("table write made no progress");
-        } catch (IOException failure) { failed = true; throw failure; }
-        return new Pointer(offset, payload.length);
+        var pointer = new Pointer(offset, payload.length); // allocate before any file mutation
+        failed = true; // includes IOException, unchecked failures and allocation Errors inside I/O
+        channel.position(offset);
+        while (bytes.hasRemaining()) if (writer.write(channel, bytes) <= 0) throw new IOException("table write made no progress");
+        failed = false;
+        return pointer;
     }
 
     void scan(Visitor visitor) throws IOException {

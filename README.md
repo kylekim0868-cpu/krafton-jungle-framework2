@@ -28,4 +28,5 @@ printf 'SELECT * FROM products;\n' > /tmp/dbms-select.sql
 ## 검증 기록
 
 - [DBMS-01](docs/dbms-01-verification.md): 파서/파일/새 JVM 조회, 39개 테스트.
-- DBMS-02·03은 선행 단계 검증 후 순차 착수한다. 자동 PR 병합/Jira 완료 전환하지 않는다.
+- [DBMS-02](docs/dbms-02-verification.md): 직접 B+ 트리·재구축·100만행 실제 비교. 누적50개 테스트.
+- DBMS-03 HTTP는 다음 단계다. 자동 PR 병합/Jira 완료 전환하지 않는다.

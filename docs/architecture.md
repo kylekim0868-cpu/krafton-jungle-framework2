@@ -3,7 +3,7 @@
 ```text
 SQL 파일 → CLI Main ─┐
                      ├→ SqlParser → SqlStatement → SqlEngine → Database → TableFile(products.jsonl)
-후속 POST /query ────┘                                         └→ 후속 B+ 트리(id → 바이트 위치/길이)
+후속 POST /query ────┘                                         └→ B+ 트리(id → 바이트 위치/길이)
 ```
 
 SQL 문법·정적 스키마 검증은 직접 작성한 SqlParser, 실행 순서는 SqlEngine, 파일/ID/잠금 생명주기는 Database, JSON Lines 바이트 처리는 TableFile이 담당한다. HTTP/CLI는 저장 형식이나 인덱스를 직접 만지지 않는다. Product는 고정 레코드, QueryResult는 INSERT affectedRows/insertedId 또는 SELECT rows를 JSON으로 전달한다.
@@ -25,7 +25,7 @@ SQL 문법·정적 스키마 검증은 직접 작성한 SqlParser, 실행 순서
 
 DirectoryLock은 JVM registry로 같은 실제 잠금 파일의 중복 개방을 채널 생성 전에 거절하고 OS FileLock으로 다른 프로세스를 막는다. 잠금 파일과 테이블 채널을 분리해 테이블 스캔 채널 종료가 소유권 잠금을 풀지 않게 한다. 신뢰된 로컬 디렉터리, 활성 파일 외부 rename/unlink/직접 쓰기 금지 전제다.
 
-Database의 공통 모니터가 명령 하나의 ID 발급/파일 변경을 보호한다. 이후 인덱스 반영도 같은 경계에서 수행한다. 다중 SELECT/INSERT의 SQL파일 전체 트랜잭션은 아니다. B+ 트리는 메모리 전용으로 파일을 진실 원천으로 삼아 시작 시 재구축한다. HTTP 스레드 풀은 같은 엔진/Database 인스턴스를 공유한다.
+Database의 공통 모니터가 명령 하나의 ID 발급/파일 변경을 보호한다. 이후 인덱스 반영도 같은 경계에서 수행한다. 다중 SELECT/INSERT의 SQL파일 전체 트랜잭션은 아니다. B+ 트리는 메모리 전용으로 파일을 진실 원천으로 삼아 시작 시 재구축한다. 내부 구분 키는 오른쪽 자식의 최소 키이며 upper-bound로 자식을 선택한다. leaf는 정렬 키/행포인터와 next, 내부노드는 구분키/자식 배열을 갖는다. overflow 시 leaf는 양분·구분키복사, 내부노드는 중간키승격·양분하며 루트분할은 새루트를 만든다. 중복키는 값을교체하고 크기를늘리지 않는다. 전체검증 함수로 점유율/구분키/범위/leaf동일깊이/연결/크기를 확인한다. HTTP 스레드 풀은 같은 엔진/Database 인스턴스를 공유한다.
 
 ## 프로젝트
 
