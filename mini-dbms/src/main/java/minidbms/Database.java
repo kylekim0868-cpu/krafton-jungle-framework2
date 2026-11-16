@@ -36,12 +36,21 @@ public final class Database implements AutoCloseable {
         }
     }
 
-    public synchronized QueryResult execute(SqlStatement statement) throws IOException {
+    public QueryResult execute(SqlStatement statement) throws IOException { return execute(statement, QueryLimits.UNLIMITED); }
+
+    public synchronized QueryResult execute(SqlStatement statement, QueryLimits limits) throws IOException {
+        Objects.requireNonNull(limits, "limits");
         if (closed) throw new IllegalStateException("database closed");
         if (writesFailed || table.writesFailed()) throw new IOException("database unavailable until reopened and validated");
-        if (statement instanceof SqlStatement.Insert insert) return insert(insert);
-        if (statement instanceof SqlStatement.Select select) return select(select);
-        throw new IllegalArgumentException("unknown statement");
+        try {
+            if (statement instanceof SqlStatement.Insert insert) return insert(insert);
+            if (statement instanceof SqlStatement.Select select) return select(select, limits);
+            throw new IllegalArgumentException("unknown statement");
+        } catch (IOException failure) {
+            // A failed SELECT must not allow apparently healthy index misses or later writes.
+            writesFailed = true;
+            throw failure;
+        }
     }
 
     private QueryResult insert(SqlStatement.Insert insert) throws IOException {
@@ -66,23 +75,36 @@ public final class Database implements AutoCloseable {
         return new QueryResult("INSERT", 1, product.id(), List.of(), "APPEND");
     }
 
-    private QueryResult select(SqlStatement.Select select) throws IOException {
+    private QueryResult select(SqlStatement.Select select, QueryLimits limits) throws IOException {
         var rows = new ArrayList<Map<String, Object>>();
+        long[] bytes = {0};
         if (select.filter() != null && select.filter().column().equals("id")) {
             long id = (Long) select.filter().value();
             var pointer = primary.get(id);
             if (pointer.isPresent()) {
                 var product = table.read(pointer.orElseThrow());
                 if (product.id() != id) throw new IOException("index/file ID mismatch");
-                rows.add(project(product, select.columns()));
+                collect(rows, product, pointer.orElseThrow(), select, limits, 0);
             }
             return new QueryResult("SELECT", 0, null, rows, "PRIMARY_KEY_INDEX");
         }
         table.scan((product, pointer) -> {
-            if (select.filter() == null || select.filter().matches(product)) rows.add(project(product, select.columns()));
+            if (select.filter() == null || select.filter().matches(product)) {
+                bytes[0] = collect(rows, product, pointer, select, limits, bytes[0]);
+            }
             return rows.size() < select.limit();
         });
         return new QueryResult("SELECT", 0, null, rows, "TABLE_SCAN");
+    }
+
+    private static long collect(List<Map<String, Object>> rows, Product product, TableFile.Pointer pointer,
+                                SqlStatement.Select select, QueryLimits limits, long usedBytes) {
+        // Full stored row bytes are a conservative bound even for smaller projections.
+        if (rows.size() >= limits.maxRows() || pointer.length() > limits.maxRowBytes() - usedBytes) {
+            throw new ResultLimitException();
+        }
+        rows.add(project(product, select.columns()));
+        return usedBytes + pointer.length();
     }
 
     private static Map<String, Object> project(Product product, List<String> columns) {
