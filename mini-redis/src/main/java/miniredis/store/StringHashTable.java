@@ -45,11 +45,11 @@ final class StringHashTable {
         }
 
         // 기존 키는 위에서 처리했으므로 신규 키만 크기 증가와 확장 대상이다.
-        if ((size + 1L) * 4 > buckets.length * 3L) {
+        if ((size + 1L) * 4 > buckets.length * 3L) { // 실수 나눗셈 대신 정수의 곱셈만으로 Load Factor를 비교한 코드. (size+1)/buckets.length > 0.75 (원래 식)
             resize();
             index = bucketIndex(key, buckets.length);
         }
-        buckets[index] = new Node(key, new Entry(value, expiresAt), buckets[index]);
+        buckets[index] = new Node(key, new Entry(value, expiresAt), buckets[index]); // 세 번째 인자인 buckets[index]는 새 노드의 next가 기존 Head를 가리키도록
         size++;
     }
 
@@ -126,15 +126,16 @@ final class StringHashTable {
         if (buckets.length > Integer.MAX_VALUE / 2) {
             throw new IllegalStateException("bucket capacity cannot be doubled");
         }
-        Node[] expanded = new Node[buckets.length * 2];
-        for (Node head : buckets) {
+        Node[] expanded = new Node[buckets.length * 2]; // 2배 크기의 빈 배열 생성
+        // 기존 버킷 순회
+        for (Node head : buckets) { 
             Node node = head;
             while (node != null) {
-                Node next = node.next;
-                int index = bucketIndex(node.key, expanded.length);
-                node.next = expanded[index];
-                expanded[index] = node;
-                node = next;
+                Node next = node.next; // 원래 다음 노드 참조 보관
+                int index = bucketIndex(node.key, expanded.length); // 새 버킷 Index 계산
+                node.next = expanded[index]; // 새 버킷의 기존 Head에 연결
+                expanded[index] = node; // 현재 노드를 새 Head로 설정
+                node = next; // 다음 기존 노드로 이동
             }
         }
         // 노드를 재사용해 연결만 바꾼다. 재배치는 신규 삽입이 아니므로 size는 유지한다.

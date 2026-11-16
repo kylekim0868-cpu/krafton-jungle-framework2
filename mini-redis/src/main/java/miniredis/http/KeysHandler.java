@@ -51,6 +51,9 @@ final class KeysHandler implements HttpHandler {
         }
     }
 
+    // PUT -> handle() -> route() -> put() -> store.put()
+    // GET -> handle() -> route() -> store.get()
+    // DELETE -> handle() -> route() -> store.delete()
     private void route(HttpExchange exchange) throws IOException {
         String rawPath = exchange.getRequestURI().getRawPath();
         if (!rawPath.startsWith(PREFIX)) {
@@ -91,13 +94,21 @@ final class KeysHandler implements HttpHandler {
         }
     }
 
+    // 잘못된 요청이 저장소의 기존 데이터를 변경하지 못하도록, 데이터 검증을 끝낸 다음에 저장하도록 설계.
     private void put(HttpExchange exchange, String key) throws IOException {
         String contentType = exchange.getRequestHeaders().getFirst("Content-Type");
         if (contentType == null || !contentType.split(";", 2)[0].trim().equalsIgnoreCase("application/json")) {
             sendError(exchange, 415, "UNSUPPORTED_MEDIA_TYPE");
             return;
         }
-        byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST_BYTES + 1);
+        // HTTP요청 본문을 바이트 배열로 읽는다.
+        // 실제 HTTP 요청 본문은 UTF-8 등으로 인코딩된 바이트로 전송되기 때문이다.
+        // ex) 문자 A는 UTF-8에서 바이트 값 365(16진수 0x41)로 표현된다.
+        // 서버는 이 데이터를 먼저 바이트 단위로 읽는다.
+        // 1) 요청 크기 제한
+        // 2) 정확한 인코딩 처리
+        // 3) 데이터 검증
+        byte[] body = exchange.getRequestBody().readNBytes(MAX_REQUEST_BYTES + 1); 
         if (body.length > MAX_REQUEST_BYTES) {
             sendError(exchange, 413, "REQUEST_TOO_LARGE");
             return;
@@ -105,6 +116,7 @@ final class KeysHandler implements HttpHandler {
 
         JsonNode root;
         try {
+            // 바이트 배열에 담긴 JSON데이터를 Java에서 다룰 수 있는 JsonNode 객체로 파싱한다.
             root = json.readTree(body);
         } catch (JacksonException invalidJson) {
             sendError(exchange, 400, "INVALID_REQUEST");

@@ -71,11 +71,14 @@ public final class KeyValueStore implements AutoCloseable {
     }
 
     private void applyPut(String key, String value, Long expiresAt) {
+        // 저장소에 쓰기 가능한 상태인지 확인
         ensureWritable();
         // validation precedes logging; failed validation never changes the AOF or memory.
+        // 디스크 로그를 먼저 기록하는 이유
+        // 해시 테이블을 먼저 변경한 다음 AOF기록에 실패했다면 메모리에는 저장이 되었지만, 재시작 후 해당 변경을 복구할 기록이 없을 수 있기 때문이다.
         var mutation = new Mutation("PUT", key, value, expiresAt);
         append(mutation);
-        boolean applied = false;
+        boolean applied = false; // 해시 테이블 변경 작업이 정상적으로 완료되었는지 추적하는 변수
         try {
             table.put(key, value, expiresAt);
             applied = true;
@@ -83,6 +86,8 @@ public final class KeyValueStore implements AutoCloseable {
             throw new StorageUnavailableException("durable write could not be applied; restart required", failure);
         } finally {
             // Even allocation Errors after a durable append must not allow further writes.
+            // AOF에는 변경 기록이 존재하지만 메모리에는 반영되지 않았으므로, 서버가 계속 쓰기를 허용한다면 로그와 실제 메모리 상태의 차이가 더 복잡해질 수 있다.
+            // ★ 데이터 일관성을 보호하기 위한 장애 대응 정책!
             if (!applied) writesFailed = true;
         }
     }
@@ -109,10 +114,18 @@ public final class KeyValueStore implements AutoCloseable {
     /** 조회·만료 판정·삭제가 원자적이므로 이전 만료가 새 값을 지우지 않는다. */
     public synchronized Optional<String> get(String key) {
         ensureOpen();
+        
+        // 해시 테이블에서 key에 해당하는 항목을 찾는다.
+        // 항목이 없으면 빈 결과를 반환.
         var entry = table.entry(key);
         if (entry.isEmpty()) {
             return Optional.empty();
         }
+
+        // Lazy Expiration(지연 만료): 조회 시에 만료를 확인하는 것이 포인트!
+        // 항목이 있다면 현재 시각과 만료 시각을 비교
+        // 이미 만료됐다면 그때 헤시 테이블엣허 삭제하고 빈 결과를 반환
+        // 만료되지 않았다면 저장된 값 반환
         if (entry.orElseThrow().expired(clock.millis())) {
             table.delete(key);
             return Optional.empty();
