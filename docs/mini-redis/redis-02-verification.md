@@ -74,7 +74,7 @@ HTTP 테스트는 매번 새 저장소와 `127.0.0.1:0` 서버를 만들고 실�
 
 ## 독립 서버 실행·외부 호출
 
-[README 실행 절차](../README.md#http-서버-실행)를 따른다. 런타임 의존성 준비에는 Maven Dependency Plugin의 고정 버전 goal을 사용한다. 이는 실행용 파일을 target에 복사하는 빌드 도구이며 추가 애플리케이션 의존성을 도입하지 않는다.
+[README 실행 절차](../../mini-redis/README.md#http-서버-실행)를 따른다. 런타임 의존성 준비에는 Maven Dependency Plugin의 고정 버전 goal을 사용한다. 이는 실행용 파일을 target에 복사하는 빌드 도구이며 추가 애플리케이션 의존성을 도입하지 않는다.
 
 ```sh
 cd mini-redis

@@ -33,4 +33,4 @@ curl -i http://127.0.0.1:8081/products/42
 python3 examples/product-api/smoke.py
 ```
 
-실제 HTTP로 적중·TTL·삭제·변경 무효화와 캐시 SIGKILL 후 fallback을 검증한다. 자세한 결과는 [REDIS-04 검증 기록](../../docs/redis-04-verification.md)을 따른다.
+실제 HTTP로 적중·TTL·삭제·변경 무효화와 캐시 SIGKILL 후 fallback을 검증한다. 자세한 결과는 [REDIS-04 검증 기록](../../docs/mini-redis/redis-04-verification.md)을 따른다.

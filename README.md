@@ -1,81 +1,50 @@
-# krafton-jungle-framework2
+# Mini Redis · Mini DBMS
 
-Java로 Mini Redis와 Mini DBMS를 직접 구현하고, 공통 기준으로 검증·비교하는 프로젝트다.
+하나의 저장소에서 두 Java 프로젝트를 **독립적으로 빌드·실행·검증**한다. 공통 부모 POM이나 모듈 간 소스 의존성은 없다.
 
-## 현재 상태
+| 프로젝트 | 기능 | 실행·테스트 | 요구사항 | 아키텍처 |
+|---|---|---|---|---|
+| Mini Redis | 해시 테이블, TTL, HTTP, 상품 캐시 예제, AOF | [안내](mini-redis/README.md) | [REDIS-00~AOF](docs/mini-redis/requirements.md) | [설계](docs/mini-redis/architecture.md) |
+| Mini DBMS | SQL·JSONL 파일, B+ 트리, CLI, HTTP | [안내](mini-dbms/README.md) | [DBMS-01~03](docs/mini-dbms/requirements.md) | [설계](docs/mini-dbms/architecture.md) |
 
-REDIS-00~02 구현은 개인 통합 브랜치에 전달됐으며, REDIS-03~REDIS-AOF도 요구사항별 이슈·브랜치에서 구현·검증해 단계별 PR로 전달한다. Mini DBMS는 후속 작업이다. 현재 기능과 검증은 [요구사항 연결표](docs/requirements.md#이슈브랜치-연결) 및 단계별 기록을 따른다.
+## 구조
 
-작업은 **팀원별 요구사항 1개 → Jira 이슈 1개 → 작업 브랜치 1개 생성 → 즉시 원격 publish·upstream 연결 → 구현·검증** 순서로 진행한다. 브랜치 이름은 `<유형>/<이슈키>-<팀원 이니셜>-<작업명>`을 따른다. 최초 publish는 새 작업 커밋 없이 분기 기준 커밋을 올리는 절차이며, 이후 구현 커밋과 Push는 별도 승인 대상이다. 기존 `ym-mini-redis`는 설정 요구사항 `REDIS-00` / `KJF-51`에만 사용하며, 이후 요구사항에는 새 전용 브랜치를 만든다. [운영 규칙](TEAM_DEVELOPMENT_RULES.md)과 [요구사항별 연결표](docs/requirements.md#이슈브랜치-연결)를 확인한다.
-
-## 문서 안내
-
-| 문서 | 내용 |
-|---|---|
-| [요구사항](docs/requirements.md) | 구현 순서, 필수 동작, API 계약, 단계별 완료 기준 |
-| [아키텍처](docs/architecture.md) | 모듈 책임, 의존 방향, 목표 폴더 구조, 기술 스택 |
-| [작업 지침](AGENTS.md) | 에이전트의 구현 순서와 검증·보고 규칙 |
-| [팀 개발 규칙](TEAM_DEVELOPMENT_RULES.md) | 요구사항·이슈·브랜치 연결, Git·Jira, PR 리뷰와 선별 통합 절차 |
-| [0단계 검증 기록](docs/redis-00-verification.md) | KJF-51 설정 범위, Java·Maven·OMX 검증 결과와 남은 제약 |
-| [REDIS-01 검증 기록](docs/redis-01-verification.md) | 해시 테이블·저장소 API, 사전 할당·리사이즈 설계, 단위 테스트 결과 |
-| [REDIS-02 검증 기록](docs/redis-02-verification.md) | HTTP API·오류 응답·TTL 미지원 정책, 서버 실행과 실제 네트워크 검증 |
-| [REDIS-03 검증 기록](docs/redis-03-verification.md) | TTL 경계·공통 잠금·다중 HTTP 요청 검증 |
-| [REDIS-04 검증 기록](docs/redis-04-verification.md) | 상품 API 캐시 적중·만료·무효화·장애 fallback |
-| [REDIS-05 성능 비교](docs/redis-05-verification.md) | 동일 조건 미사용·미스·적중의 실측값과 재현 방법 |
-| [REDIS-AOF 복구 검증](docs/redis-aof-verification.md) | 프레임·CRC·동기 기록·강제 종료 복구와 실제 비용 |
-
-### 기능별 바로가기
-
-- **Mini Redis**: [구현 단계](docs/requirements.md#현재-범위와-구현-순서) · [필수 동작](docs/requirements.md#mini-redis-필수-동작) · [HTTP API](docs/requirements.md#외부-http-api)
-- **검증과 복구**: [검증·비교 기준](docs/requirements.md#검증과-비교-기준) · [선택적 AOF 설계](docs/requirements.md#장애-복구-설계)
-- **Mini DBMS**: [후속 요구사항](docs/requirements.md#mini-dbms-후속-요구사항)
-
-## 개발 환경과 검증
-
-설계 기준은 Java 25 LTS, Maven Wrapper, JDK `HttpServer`, Jackson, JUnit이다.
-
-Java 25 JDK를 선택한 터미널에서 다음 명령으로 Maven과 프로젝트 설정을 확인한다. 첫 실행 시 Maven Wrapper가 지정된 Maven 배포판과 빌드 의존성을 내려받는다.
-
-```sh
-cd mini-redis
-./mvnw --version
-./mvnw test
+```text
+krafton-jungle-framework2/
+├── mini-redis/             # 자체 pom.xml·Maven Wrapper·소스·테스트
+├── mini-dbms/              # 자체 pom.xml·Maven Wrapper·소스·테스트
+├── docs/
+│   ├── mini-redis/         # Redis 요구사항·설계·검증·벤치마크
+│   └── mini-dbms/          # DBMS 요구사항·설계·검증·벤치마크
+├── examples/product-api/  # Redis의 테스트용 원본 기반 캐시 예제
+├── AGENTS.md               # 공통 작업·검증 지침
+└── TEAM_DEVELOPMENT_RULES.md
 ```
 
-`./mvnw test`는 저장소·TTL·동시성·상품 캐시·AOF와 실제 loopback HTTP/별도 JVM 테스트를 실행한다. 현재 누적 검증은135개 통과다. Java 25와 로컬 포트 바인딩 권한이 필요하다.
+## 독립 테스트
 
-### HTTP 서버 실행
+Java **25** JDK를 `JAVA_HOME`으로 선택한다. 첫 실행에는 Maven과 의존성 다운로드가 필요하다. 테스트는 loopback 포트 바인딩과 별도 JVM 실행을 사용하며, 미리 실행한 서버가 필요하지 않다.
 
-Java 25를 가리키는 `JAVA_HOME`이 설정된 셸에서 실행한다. 아래는 macOS/Linux 기준이다.
-
-```sh
-cd mini-redis
-./mvnw compile org.apache.maven.plugins:maven-dependency-plugin:3.11.0:copy-dependencies -DincludeScope=runtime
-"$JAVA_HOME/bin/java" -cp "target/classes:target/dependency/*" miniredis.Main 8080 100000
-```
-
-첫 인자는 포트(0이면 자동 할당), 두 번째는 예상 최대 고유 키 수다. 서버는 `127.0.0.1`에서 실행되며 Ctrl+C로 종료한다. 별도 터미널에서 확인한다.
+저장소 루트에서 각각 실행한다.
 
 ```sh
-curl -i -X PUT http://127.0.0.1:8080/keys/product:42 -H 'Content-Type: application/json' -d '{"value":"상품 응답"}'
-curl -i http://127.0.0.1:8080/keys/product:42
-curl -i -X DELETE http://127.0.0.1:8080/keys/product:42
-curl -i http://127.0.0.1:8080/keys/product:42
+(cd mini-redis && ./mvnw test)
+(cd mini-dbms && ./mvnw test)
 ```
 
-기대 상태 코드는 **204 → 200 → 204 → 404**다. `ttlMs`는 선택적인 양의 정수이며, 생략한 덮어쓰기는 이전 만료를 제거한다. 잘못된 TTL은 `400 INVALID_TTL`이다.
-
-### 상품 API
-
-[별도 JVM 실행과 HTTP 검증](examples/product-api/README.md)을 따른다. 테스트 원본을 사용하는 예제로 Mini DBMS나 운영 서비스는 아니다.
-
-### AOF 사용
-
-위 빌드 후 `mini-redis/`에서 기존2개 인자 뒤 로컬 AOF 경로를 추가한다. 경로를 생략하면 기존 메모리 전용 모드다.
+두 결과를 한 번에 확인하려면:
 
 ```sh
-mkdir -p data
-"$JAVA_HOME/bin/java" -cp 'target/classes:target/dependency/*' miniredis.Main 8080 100000 data/store.aof
+(cd mini-redis && ./mvnw test) && (cd mini-dbms && ./mvnw test)
 ```
 
-같은 경로로 재시작하면 기록한 값·삭제·절대 만료를 복구한다. 로그는 삭제하지 말고 보존해야 한다. 기록/동기화 실패는503, 이후 쓰기는 재시작 검증 전까지 중단한다. 완전한 손상이면 시작을 거절한다. [파일 형식·복구 절차·보장 경계·비용](docs/redis-aof-verification.md)을 확인한다. 자동 PR 병합이나 main 최종 통합은 수행하지 않는다.
+각 프로젝트는 자체 `target/`과 임시 테스트 데이터를 사용한다. 실제 실행 데이터는 각각 `mini-redis/data/`, `mini-dbms/data/`에 두며 Git에 포함하지 않는다. 실행 예시 포트는 Redis **8080**, 상품 API **8081**, DBMS **8090**으로 구분한다.
+
+## 독립성의 범위
+
+- Redis 테스트에는 DBMS 서버가 필요 없고, DBMS 테스트에는 Redis 서버가 필요 없다.
+- 현재 상품 API 원본은 테스트용 구현이다. **DBMS 원본 + Redis 캐시의 실제 연동·통합 테스트는 아직 구현하지 않았다.**
+- 개인 통합 대상은 `ym-mini-dbms`다. [폴더·브랜치 통합 검증 기록](docs/workspace-verification.md)을 확인한다. `main` 통합과 실제 Redis–DBMS 연동은 별도 범위다.
+- 기능별 문서는 각 `docs/mini-*/`에서 관리하고, 루트 문서는 탐색과 공통 정책만 담당한다.
+
+[전체 요구사항 안내](docs/requirements.md) · [전체 구조](docs/architecture.md) · [작업 지침](AGENTS.md) · [팀 개발 규칙](TEAM_DEVELOPMENT_RULES.md)

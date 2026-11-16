@@ -18,6 +18,6 @@
 
 ## 재현·제약
 
-[예제 실행 안내](../examples/product-api/README.md). cache-aside는 원본 변경과 원자적이지 않다. 무효화 실패 또는 이미 진행 중인 조회의 stale refill은 TTL로 제한하며 분산 일관성을 보장하지 않는다. 캐시 미사용과 실제 DB 성능 비교는 아직 측정하지 않았다.
+[예제 실행 안내](../../examples/product-api/README.md). cache-aside는 원본 변경과 원자적이지 않다. 무효화 실패 또는 이미 진행 중인 조회의 stale refill은 TTL로 제한하며 분산 일관성을 보장하지 않는다. 캐시 미사용과 실제 DB 성능 비교는 아직 측정하지 않았다.
 
 기술 근거: [JDK25 HttpClient 종료·취소 계약](https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpClient.html), [BodyHandlers.limiting](https://docs.oracle.com/en/java/javase/25/docs/api/java.net.http/java/net/http/HttpResponse.BodyHandlers.html), [JDK26에서 본문까지 request timeout 확장](https://www.oracle.com/java/technologies/javase/26-relnote-issues.html). JDK25를 대상으로 별도 전체 응답 deadline을 선택했다.
