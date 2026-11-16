@@ -1,6 +1,6 @@
 # Mini DBMS 요구사항과 진행 기준
 
-DBMS-01~DBMS-03 구현을 이 프로젝트의 `mini-dbms/`에서 독립적으로 관리한다. Redis와 소스·빌드·데이터를 공유하지 않는다. 사용자 개인 기준 브랜치는 `ym-mini-dbms`, Jira 에픽은 [KJF-58](https://kylekim0868.atlassian.net/browse/KJF-58)이다. 최초 기준은 `c5381b323311e6738fc0f48afefd397ba0db3e2d`이며 단계별 구현은 전용 브랜치에서 전달했다. 현재 폴더 통합은 원격 PR 병합이나 Jira 완료 전환을 의미하지 않는다. 실제 Redis 캐시 연동은 이번 범위에서 제외한다.
+DBMS-01~DBMS-03 구현을 이 프로젝트의 `mini-dbms/`에서 독립적으로 관리한다. Redis와 소스·빌드·데이터를 공유하지 않는다. 사용자 개인 기준 브랜치는 `ym-mini-dbms`, Jira 에픽은 [KJF-58](https://kylekim0868.atlassian.net/browse/KJF-58)이다. 최초 기준은 `c5381b323311e6738fc0f48afefd397ba0db3e2d`이며 단계별 구현은 전용 브랜치에서 전달했다. 폴더·문서 통합 결과는 [개인 통합 기록](../workspace-verification.md)에 따라 ym-mini-dbms 대상 PR #40으로 관리한다. main 통합이나 Jira 완료 전환은 포함하지 않는다. 실제 Redis 캐시 연동은 이번 범위에서 제외한다.
 
 ## 현재 범위와 구현 순서
 

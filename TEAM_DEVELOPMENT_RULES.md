@@ -70,3 +70,5 @@ CONTRIBUTING의 리뷰 기준에 따라 최소 1명 팀원 승인, 필수 지적
 - Redis는 `(cd mini-redis && ./mvnw test)`, DBMS는 `(cd mini-dbms && ./mvnw test)`로 검증한다. 각각 상대 모듈의 서버가 없어도 통과해야 한다.
 - 루트 README·AGENTS·팀 규칙은 공통 정책만, 기능 계약과 검증 이력은 각 모듈 문서가 담당한다. 상품 API의 실제 DBMS 원본 연동은 별도 요청 범위다.
 - 이번 개인 통합은 사용자 요청에 따라 `refactor/KJF-58-ym-independent-modules`에서 검증·커밋·Push한 뒤 `ym-mini-dbms` 대상 PR로 반영한다. 이는 새 기능 요구사항이 아니라 기존 Redis·DBMS 구현 및 폴더·문서 구조의 통합이다. 요구사항별 Task·작업 브랜치는 그대로 유지하고 출처 이슈 KJF-51~57·59~61과 DBMS 에픽 KJF-58을 통합 PR에 기록한다. 사용자 Redis 미커밋 수정 4개는 포함하지 않는다. main 변경·Jira 완료 전환·무관한 PR 병합은 제외하며 보호 설정을 우회하거나 스스로 승인하지 않는다.
+
+- 사용자 지정 최종 구성: `ym-mini-redis`는 Redis 구현만 유지한다. `ym-mini-dbms`는 Redis와 DBMS 두 모듈을 함께 포함한다. 통합 PR #40의 대상은 ym-mini-dbms로 한정하며 ym-mini-redis로 역병합하지 않는다.

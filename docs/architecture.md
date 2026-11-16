@@ -12,6 +12,10 @@
 
 각 모듈의 Maven Wrapper·pom.xml·target·테스트 데이터를 분리한다. 테스트 서버는 임시 loopback 포트와 임시 디렉터리를 사용하고 테스트 종료 시 닫는다. 실행/테스트 명령은 [루트 README](../README.md#독립-테스트)와 각 모듈 README를 따른다.
 
+## 브랜치 경계
+
+`ym-mini-redis`는 Redis 구현만 포함한다. 이 문서의 두 모듈 구조는 `ym-mini-dbms`의 개인 통합 결과다. DBMS 추가를 Redis 전용 브랜치로 역병합하지 않으며 main은 변경하지 않는다.
+
 ## 현재 데이터 흐름
 
 ```text

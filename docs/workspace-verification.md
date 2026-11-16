@@ -50,3 +50,13 @@ Java 25.0.5+8-LTS / Maven 3.9.11에서 저장소 루트 기준 아래 명령을 
 - 최초 publish: Redis 기준 `cf0b5d6`에서 새 커밋 없이 원격에 publish했고 로컬·원격 SHA와 upstream을 확인했다. 이전 요청으로 이미 준비된 폴더 정리 변경을 이어받았으며 publish 뒤 통합 커밋을 만든다.
 - 승인 범위: 통합 커밋·Push·`ym-mini-dbms` 대상 PR 병합. main 변경·Force Push·자동 승인·Jira 완료 전환은 제외한다.
 - 출처 PR: DBMS #37~39, Redis 개인 통합 #32. 이번 통합은 별도 PR로 관리하며 출처 작업 브랜치는 삭제하지 않는다.
+
+### 개인 통합 PR과 깨끗한 커밋 검증
+
+- 통합 PR: [#40](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/pull/40), 대상 `ym-mini-dbms`, head `refactor/KJF-58-ym-independent-modules`.
+- 실제 DBMS 이력 연결 merge commit: `fa5f01cbb7efaceb01789eab333196a52a385424`. 결과 트리는 직전 폴더 정리 커밋과 같으며 root 공통 파일 7개의 충돌은 모듈별 단일 문서 구조로 해결했다.
+- 작업 도중 원격 ym-mini-dbms가 `77574c12fe955789137a47947e3321744482db2d`(PR #37 병합)로 갱신됐다. 새 기준을 fetch하고 정상 merge로 보존했다. 출처 PR #37/#38/#39가 이미 외부에서 병합된 상태임도 확인했으며 이번 작업이 해당 PR을 병합한 것은 아니다.
+- 위 fa5f01c의 **미커밋 변경 없는 검증 worktree**에서 다시 테스트했다. Redis **135개/실패·오류·생략0/11.345초**, DBMS **75개/실패·오류·생략0/7.018초**, 모두 BUILD SUCCESS. 기존 Redis 사용자 미커밋 주석을 포함하지 않은 결과다.
+- 커밋된 Redis 구현·빌드·테스트는 cf0b5d6, DBMS 구현·빌드·테스트는 322accc와 동일하다. 각각 새 README만 추가했고 실제 코드·알고리즘·저장 형식은 바꾸지 않았다.
+- 최종 사용자 지정: **ym-mini-dbms에는 두 모듈**, **ym-mini-redis에는 Redis 구현만** 둔다. ym-mini-redis와 main 원격 SHA는 이번 작업에서 변경하지 않는다.
+- 사용자 미커밋 Redis 파일 4개는 스테이징·커밋하지 않고 기존 내용 그대로 보존한다. 통합 결과와 개인 변경의 상태를 구분해 보고한다.

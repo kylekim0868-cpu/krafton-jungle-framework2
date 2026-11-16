@@ -7,6 +7,12 @@
 | Mini Redis | 해시 테이블, TTL, HTTP, 상품 캐시 예제, AOF | [안내](mini-redis/README.md) | [REDIS-00~AOF](docs/mini-redis/requirements.md) | [설계](docs/mini-redis/architecture.md) |
 | Mini DBMS | SQL·JSONL 파일, B+ 트리, CLI, HTTP | [안내](mini-dbms/README.md) | [DBMS-01~03](docs/mini-dbms/requirements.md) | [설계](docs/mini-dbms/architecture.md) |
 
+## 브랜치별 구성
+
+- `ym-mini-redis`: Redis 구현만 유지한다. DBMS 구현과 이번 통합 정리를 역으로 병합하지 않는다.
+- `ym-mini-dbms`: `mini-redis/`와 `mini-dbms/`를 함께 포함한다. 두 모듈의 빌드·테스트·실행·문서는 독립적이다.
+- `main`: 이번 개인 통합에서 변경하지 않는다.
+
 ## 구조
 
 ```text
