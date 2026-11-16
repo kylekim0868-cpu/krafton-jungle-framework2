@@ -60,7 +60,9 @@ public class TTLManager {
         log.info("[TTL] Active expiration scheduler started (interval={}ms)", intervalMillis);
     }
 
-    /** 한 번의 Active Expiration 사이클. 예외가 스케줄러 밖으로 나가면 이후 실행이 중단되므로 모두 잡는다. */
+    /** 0번 세그먼트부터 15번 세그먼트까지 한 번에 세그먼트 하나씩만 Write Lock을 잡고 만료된 노드를 전부 unlink합니다. 
+     * 세그먼트 하나 청소가 끝나면 즉시 락을 풀어주므로 청소 중에도 다른 세그먼트의 API 요청은 멈추지 않습니다.
+    */
     void expireCycle() {
         try {
             int removed = store.removeExpired();

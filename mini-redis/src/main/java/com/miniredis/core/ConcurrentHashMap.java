@@ -148,7 +148,7 @@ public class ConcurrentHashMap {
     // =====================================================================
 
     /**
-     * 조회. Read Lock 으로 동시 읽기를 허용하면서 Lazy Expiration 을 안전하게 처리한다.
+     * 조회. Read Lock 으로 동시 읽기를 허용하면서 Lazy Expiration 을 안전하게 처리한다.c 
      *
      * <ol>
      *   <li>Read Lock 획득 후 peek(구조 변경 없는 조회).</li>
@@ -156,7 +156,7 @@ public class ConcurrentHashMap {
      *   <li>만료되었으면 Read Lock 해제 → Write Lock 획득 후 HashTable.get() 호출.
      *       HashTable.get() 내부의 Lazy Expiration 로직이 체인에서 엔트리를 제거한다.
      *       (ReentrantReadWriteLock 은 Read→Write 직접 승격을 지원하지 않으므로 해제 후 재획득.
-     *        그 사이 다른 스레드가 값을 갱신했을 수 있는데, HashTable.get() 이 다시 검사하므로 안전하다.)</li>
+     *       그 사이 다른 스레드가 값을 갱신했을 수 있는데, HashTable.get() 이 다시 검사하므로 안전하다.)</li>
      * </ol>
      */
     public Object get(String key) {

@@ -88,7 +88,7 @@ public class HashTable {
     private int resizeCount;
 
     public HashTable() {
-        this(DEFAULT_CAPACITY);
+        this(DEFAULT_CAPACITY); //아래 있는 진짜 생성자 호출
     }
 
     public HashTable(int initialCapacity) {
@@ -100,6 +100,13 @@ public class HashTable {
         this.size = 0;
     }
 
+
+    /*
+    자바 문법상 제네릭 타입의 배열은 직접 생성할 수 없습니다. (예: new Entry<K, V>[16]은 컴파일 에러 발생)
+    그래서 HashTable 같은 자료구조를 직접 구현할 때는 어쩔 수 없이 일반 배열(Raw type)이나 Object[] 배열로 먼저 생성한 뒤, 제네릭 타입으로 강제 형변환을 해야 합니다.
+    이때 컴파일러는 *"Object 배열을 Entry<K, V> 배열로 바꾸면 실행 중에 타입 에러가 날 수도 있는데 정말 괜찮겠어?"*라며 Unchecked cast(확인되지 않은 형변환) 경고를 띄웁니다.
+    개발자 입장에서는 내부적으로 안전하게 관리할 것임을 알고 있으므로, 불필요한 노란색 경고 줄을 없애기 위해 @SuppressWarnings("unchecked")를 붙여주는 것입니다.
+    */
     @SuppressWarnings("unchecked")
     private static Entry<String, Object>[] newBucketArray(int capacity) {
         // 제네릭 배열은 직접 생성할 수 없으므로 raw 배열 생성 후 캐스팅
@@ -118,6 +125,7 @@ public class HashTable {
      *   <li>0x7FFFFFFF 와 AND 연산하여 부호 비트(최상위 비트)를 제거 → 항상 0 이상의 양수.
      *       (Math.abs 는 Integer.MIN_VALUE 에서 음수를 반환하므로 사용하지 않는다.)</li>
      *   <li>capacity 로 나눈 나머지 → 0 ~ capacity-1 범위의 버킷 인덱스.</li>
+     *   같은 키값으로 항상 같은 버킷을 가져올 수 있음
      * </ol>
      */
     private int hash(String key, int cap) {
