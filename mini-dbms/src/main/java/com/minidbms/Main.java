@@ -1,5 +1,6 @@
 package com.minidbms;
 
+import com.minidbms.dbms.bench.Benchmark;
 import com.minidbms.dbms.DbException;
 import com.minidbms.dbms.cli.TablePrinter;
 import com.minidbms.dbms.engine.Database;
@@ -26,6 +27,7 @@ import java.util.Map;
  * <pre>
  *   run &lt;file.sql&gt;   SQL 파일을 읽어 실행        (Phase 1)
  *   repl             대화형으로 SQL 입력          (Phase 1)
+ *   bench            대량 삽입 + 인덱스 성능 비교  (Phase 2)
  * </pre>
  */
 public final class Main {
@@ -36,8 +38,10 @@ public final class Main {
             "Usage:",
             "  run <file.sql> [--data-dir DIR]                      Execute SQL statements from a file",
             "  repl [--data-dir DIR]                                Interactive SQL shell",
+            "  bench [--rows N] [--data-dir DIR]                    Insert N rows (default 1000000) and compare",
+            "                                                       indexed vs. linear SELECT",
             "",
-            "Defaults: --data-dir data");
+            "Defaults: --data-dir data (bench: bench-data)");
 
     private Main() {
     }
@@ -77,6 +81,8 @@ public final class Main {
                 return runFile(args[1], parseOptions(args, 2));
             case "repl":
                 return repl(parseOptions(args, 1));
+            case "bench":
+                return bench(parseOptions(args, 1));
             default:
                 throw new IllegalArgumentException("Unknown command: " + command);
         }
@@ -152,6 +158,17 @@ public final class Main {
     }
 
     // ------------------------------------------------------------------
+    // bench
+    // ------------------------------------------------------------------
+
+    private static int bench(Map<String, String> options) throws IOException {
+        long rows = intOption(options, "rows", 1_000_000, 1, 100_000_000);
+        Path dir = Paths.get(options.getOrDefault("data-dir", "bench-data"));
+        Benchmark.run(dir, rows, System.out);
+        return 0;
+    }
+
+    // ------------------------------------------------------------------
     // 옵션 파싱
     // ------------------------------------------------------------------
 
@@ -172,5 +189,21 @@ public final class Main {
             options.put(args[i].substring(2), args[i + 1]);
         }
         return options;
+    }
+
+    private static int intOption(Map<String, String> options, String name, int defaultValue, int min, int max) {
+        String raw = options.get(name);
+        if (raw == null) {
+            return defaultValue;
+        }
+        try {
+            int value = Integer.parseInt(raw);
+            if (value < min || value > max) {
+                throw new NumberFormatException();
+            }
+            return value;
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("--" + name + " must be an integer between " + min + " and " + max);
+        }
     }
 }
