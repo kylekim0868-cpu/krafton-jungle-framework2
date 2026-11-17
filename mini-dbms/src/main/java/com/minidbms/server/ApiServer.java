@@ -7,6 +7,9 @@ import com.minidbms.dbms.engine.Table;
 import com.minidbms.dbms.sql.ColumnDef;
 import com.minidbms.dbms.sql.Parser;
 import com.minidbms.dbms.sql.Statement;
+import com.minidbms.redis.api.RedisController;
+import com.minidbms.redis.core.ConcurrentHashMap;
+import com.minidbms.redis.core.TTLManager;
 
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
@@ -17,6 +20,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -41,13 +45,22 @@ import java.util.Map;
  *   <li>큐가 가득 차면 accept 스레드가 즉시 503 을 돌려준다 (과부하 시 빠른 실패).</li>
  * </ul>
  *
- * <p><b>엔드포인트</b></p>
+ * <p><b>엔드포인트</b> — 경로만 봐도 DBMS 와 미니 레디스가 구분된다</p>
  * <pre>
- *   POST /query    본문: SQL 텍스트 또는 {"sql": "..."}   → 실행 결과
- *   GET  /tables   테이블 목록과 스키마
- *   GET  /stats    스레드 풀 상태
- *   GET  /health   서버 상태 확인
+ *   [DBMS]         POST   /query             본문: SQL 텍스트 또는 {"sql": "..."}  → 실행 결과
+ *                  GET    /tables            테이블 목록과 스키마
+ *   [미니 레디스]   POST   /api/redis         저장/수정  {"key":"k1","value":"v1","ttl":60}
+ *                  GET    /api/redis/{key}   단건 조회 (없거나 만료면 404)
+ *                  DELETE /api/redis/{key}   단건 삭제
+ *                  GET    /api/redis         전체 목록 + 통계 + 버킷 분포
+ *                  DELETE /api/redis         전체 초기화(FLUSH)
+ *   [서버]         GET    /stats             스레드 풀 + 쿼리 캐시 상태
+ *                  GET    /health            서버 상태 확인
  * </pre>
+ *
+ * <p>/api/redis 요청은 {@link RedisController} 가 처리한다 (yj-mini-redis 와 같은 경로, 같은 응답).
+ * /query 의 SELECT 는 {@link CachedQueryService} 를 거치므로, 느린 쿼리의 결과는 미니 레디스에
+ * 잠시 저장됐다가 재사용된다. 응답의 {@code "cache"} 필드(HIT / MISS / BYPASS)로 확인할 수 있다.</p>
  */
 public final class ApiServer implements AutoCloseable {
 
@@ -57,16 +70,49 @@ public final class ApiServer implements AutoCloseable {
     /** SELECT 한 번이 응답에 담을 수 있는 최대 행 수 (거대한 JSON 으로 메모리가 터지는 것을 막는다) */
     public static final long MAX_RESULT_ROWS = 10_000;
 
+    /** yj-mini-redis 의 application.yml 기본값과 같다 */
+    public static final int DEFAULT_SEGMENTS = 16;
+    public static final int DEFAULT_CAPACITY_PER_SEGMENT = 4;
+    public static final long DEFAULT_TTL_INTERVAL_MS = 1_000;
+    public static final int DEFAULT_QUERY_CACHE_TTL_SECONDS = 30;
+
     private final SqlEngine engine;
+    private final RedisController redisController;
+    private final CachedQueryService queryService;
+    /** 이 서버가 미니 레디스를 직접 만들었을 때만 값이 있다 (종료할 때 스케줄러를 같이 멈춘다) */
+    private final TTLManager ownedTtlManager;
     private final ThreadPool pool;
     private final ServerSocket serverSocket;
     private final Thread acceptThread;
     private volatile boolean running;
 
+    /** 기본 설정의 미니 레디스(세그먼트 16개, 쿼리 캐시 TTL 30초)를 내부에 만들어 쓰는 서버. */
     public ApiServer(SqlEngine engine, int port, int threadCount, int queueCapacity) throws IOException {
+        this(engine, port, threadCount, queueCapacity,
+                new ConcurrentHashMap(DEFAULT_SEGMENTS, DEFAULT_CAPACITY_PER_SEGMENT),
+                null, DEFAULT_QUERY_CACHE_TTL_SECONDS);
+    }
+
+    /**
+     * @param store                미니 레디스 저장소
+     * @param ttlManager           이미 시작된 Active Expiration 스케줄러. null 이면 서버가 직접 만들고 종료 시 멈춘다
+     * @param queryCacheTtlSeconds SELECT 결과를 캐시에 둘 시간. 0 이면 쿼리 캐시를 끈다 (/api/redis 는 계속 동작)
+     */
+    public ApiServer(SqlEngine engine, int port, int threadCount, int queueCapacity,
+                     ConcurrentHashMap store, TTLManager ttlManager, int queryCacheTtlSeconds) throws IOException {
         this.engine = engine;
         this.engine.setMaxResultRows(MAX_RESULT_ROWS);
         this.serverSocket = new ServerSocket(port); // 포트를 못 열면 여기서 실패하고, 아래 스레드들은 만들어지지 않는다
+
+        if (ttlManager == null) {
+            ttlManager = new TTLManager(store, DEFAULT_TTL_INTERVAL_MS);
+            ttlManager.start();
+            this.ownedTtlManager = ttlManager;
+        } else {
+            this.ownedTtlManager = null;
+        }
+        this.redisController = new RedisController(store, ttlManager);
+        this.queryService = new CachedQueryService(engine, store, queryCacheTtlSeconds);
         this.pool = new ThreadPool(threadCount, queueCapacity);
         this.acceptThread = new Thread(this::acceptLoop, "http-accept");
     }
@@ -183,6 +229,9 @@ public final class ApiServer implements AutoCloseable {
     /** @return {HTTP 상태 코드, JSON 으로 바꿀 응답 객체} */
     private Object[] route(HttpRequest request) {
         try {
+            if (request.path.equals("/api/redis") || request.path.startsWith("/api/redis/")) {
+                return redis(request);
+            }
             switch (request.path) {
                 case "/query":
                     requireMethod(request, "POST");
@@ -222,7 +271,9 @@ public final class ApiServer implements AutoCloseable {
                 throw new HttpError(400, "Request body must contain SQL");
             }
             for (Statement statement : statements) {
-                results.add(toJson(engine.execute(statement)));
+                // SELECT 는 캐시를 먼저 보고, INSERT 는 실행 후 캐시를 무효화한다
+                CachedQueryService.Outcome outcome = queryService.execute(statement);
+                results.add(toJson(outcome.result(), outcome.cache()));
             }
         } catch (DbException e) {
             Map<String, Object> body = errorBody(e.getMessage());
@@ -256,7 +307,7 @@ public final class ApiServer implements AutoCloseable {
         throw new HttpError(400, "JSON body must be an object with a string field \"sql\"");
     }
 
-    private static Map<String, Object> toJson(QueryResult result) {
+    private static Map<String, Object> toJson(QueryResult result, String cache) {
         Map<String, Object> json = new LinkedHashMap<>();
         json.put("type", result.type());
         if (result.type().equals("SELECT")) {
@@ -265,6 +316,7 @@ public final class ApiServer implements AutoCloseable {
             json.put("rowCount", result.rows().size());
             json.put("accessPath", result.accessPath());
             json.put("truncated", result.truncated());
+            json.put("cache", cache);
         } else if (result.type().equals("INSERT")) {
             json.put("affected", result.affected());
             json.put("firstInsertId", result.firstInsertId());
@@ -273,6 +325,83 @@ public final class ApiServer implements AutoCloseable {
         json.put("message", result.message());
         json.put("elapsedMs", Math.round(result.elapsedMs() * 1000) / 1000.0);
         return json;
+    }
+
+    // ------------------------------------------------------------------
+    // 미니 레디스 API (/api/redis) — 경로를 보고 RedisController 의 메서드를 부른다
+    // (yj-mini-redis 에서는 Spring 의 @PostMapping / @GetMapping 이 해 주던 일)
+    // ------------------------------------------------------------------
+
+    private Object[] redis(HttpRequest request) {
+        RedisController.Response response;
+
+        if (request.path.equals("/api/redis") || request.path.equals("/api/redis/")) {
+            switch (request.method) {
+                case "POST":
+                    response = redisController.set(parseSetRequest(request));
+                    break;
+                case "GET":
+                    response = redisController.list();
+                    break;
+                case "DELETE":
+                    response = redisController.flush();
+                    break;
+                default:
+                    throw new HttpError(405, "/api/redis supports POST, GET and DELETE");
+            }
+        } else {
+            String key;
+            try {
+                key = URLDecoder.decode(request.path.substring("/api/redis/".length()), StandardCharsets.UTF_8);
+            } catch (IllegalArgumentException e) {
+                throw new HttpError(400, "Malformed key in URL");
+            }
+            switch (request.method) {
+                case "GET":
+                    response = redisController.get(key);
+                    break;
+                case "DELETE":
+                    response = redisController.delete(key);
+                    break;
+                default:
+                    throw new HttpError(405, "/api/redis/{key} supports GET and DELETE");
+            }
+        }
+        return new Object[]{response.status(), response.body()};
+    }
+
+    /**
+     * 요청 본문 {"key": ..., "value": ..., "ttl": ...} 을 SetRequest 로 바꾼다.
+     * (yj-mini-redis 에서는 Spring 의 @RequestBody 가 Jackson 으로 해 주던 일)
+     */
+    private static RedisController.SetRequest parseSetRequest(HttpRequest request) {
+        String text = new String(request.body, StandardCharsets.UTF_8);
+        if (text.isBlank()) {
+            return null; // 컨트롤러가 "request body is required" 로 응답한다
+        }
+        Object parsed;
+        try {
+            parsed = Json.parse(text);
+        } catch (IllegalArgumentException e) {
+            throw new HttpError(400, e.getMessage());
+        }
+        if (!(parsed instanceof Map<?, ?> map)) {
+            throw new HttpError(400, "request body must be a JSON object");
+        }
+
+        Object key = map.get("key");
+        if (key != null && !(key instanceof String)) {
+            throw new HttpError(400, "key must be a string");
+        }
+        Integer ttl = null;
+        Object rawTtl = map.get("ttl");
+        if (rawTtl != null) {
+            if (!(rawTtl instanceof Long l) || l < 0 || l > Integer.MAX_VALUE) {
+                throw new HttpError(400, "ttl must be a non-negative integer (seconds)");
+            }
+            ttl = l.intValue();
+        }
+        return new RedisController.SetRequest((String) key, map.get("value"), ttl);
     }
 
     // ------------------------------------------------------------------
@@ -310,6 +439,15 @@ public final class ApiServer implements AutoCloseable {
         body.put("queueCapacity", pool.queueCapacity());
         body.put("completed", pool.completedCount());
         body.put("rejected", pool.rejectedCount());
+
+        // DBMS 와 미니 레디스를 잇는 쿼리 캐시의 통계
+        Map<String, Object> queryCache = new LinkedHashMap<>();
+        queryCache.put("enabled", queryService.enabled());
+        queryCache.put("ttlSeconds", queryService.ttlSeconds());
+        queryCache.put("hits", queryService.hits());
+        queryCache.put("misses", queryService.misses());
+        queryCache.put("bypassed", queryService.bypassed());
+        body.put("queryCache", queryCache);
         return body;
     }
 
@@ -477,6 +615,8 @@ public final class ApiServer implements AutoCloseable {
         switch (status) {
             case 200:
                 return "OK";
+            case 201:
+                return "Created";
             case 400:
                 return "Bad Request";
             case 404:
@@ -517,5 +657,8 @@ public final class ApiServer implements AutoCloseable {
             Thread.currentThread().interrupt();
         }
         pool.close();
+        if (ownedTtlManager != null) {
+            ownedTtlManager.stop();
+        }
     }
 }

@@ -197,6 +197,125 @@ class ApiServerTest {
         assertEquals(200, get("/health").statusCode());
     }
 
+    // ------------------------------------------------------------------
+    // 미니 레디스 (/api/redis) + 쿼리 캐시
+    // ------------------------------------------------------------------
+
+    private HttpResponse<String> redisRequest(String method, String path, String jsonBody) {
+        HttpRequest.BodyPublisher publisher = jsonBody == null
+                ? HttpRequest.BodyPublishers.noBody()
+                : HttpRequest.BodyPublishers.ofString(jsonBody, StandardCharsets.UTF_8);
+        return send(HttpRequest.newBuilder(URI.create(baseUrl + path))
+                .header("Content-Type", "application/json")
+                .method(method, publisher).build());
+    }
+
+    @Test
+    @DisplayName("쿼리 캐시: 느린 SELECT 는 MISS → HIT, INSERT 뒤에는 다시 MISS 이고 최신 결과를 준다")
+    void queryCacheThroughApi() {
+        postSql("INSERT INTO users VALUES ('kim', 20), ('lee', 30)");
+        String sql = "SELECT name FROM users WHERE age >= 20";
+
+        Map<String, Object> first = result(postSql(sql), 0);
+        Map<String, Object> second = result(postSql(sql), 0);
+        assertEquals("MISS", first.get("cache"));
+        assertEquals("HIT", second.get("cache"));
+        assertEquals(first.get("rows"), second.get("rows"));
+
+        assertEquals("BYPASS", result(postSql("SELECT * FROM users WHERE id = 1"), 0).get("cache"));
+
+        postSql("INSERT INTO users VALUES ('park', 40)");
+        Map<String, Object> third = result(postSql(sql), 0);
+        assertEquals("MISS", third.get("cache"));
+        assertEquals(List.of(List.of("kim"), List.of("lee"), List.of("park")), third.get("rows"));
+
+        Map<?, ?> queryCache = (Map<?, ?>) json(get("/stats")).get("queryCache");
+        assertEquals(true, queryCache.get("enabled"));
+        assertEquals(1L, queryCache.get("hits"));
+        assertEquals(2L, queryCache.get("misses"));
+
+        // 캐시된 결과는 미니 레디스 목록에서 "sql:" 로 시작하는 키로 보인다
+        Map<String, Object> listing = json(redisRequest("GET", "/api/redis", null));
+        assertTrue(listing.get("entries").toString().contains("sql:users:"), listing.toString());
+    }
+
+    @Test
+    @DisplayName("/api/redis: POST → GET → DELETE → GET(404) 전체 CRUD 흐름 (yj-mini-redis 와 같은 응답)")
+    void redisCrud() {
+        HttpResponse<String> set = redisRequest("POST", "/api/redis",
+                "{\"key\":\"session:42\",\"value\":\"로그인 토큰 abc\",\"ttl\":60}");
+        assertEquals(201, set.statusCode());
+        assertEquals("session:42", json(set).get("key"));
+        assertEquals(60L, json(set).get("ttl"));
+
+        Map<String, Object> got = json(redisRequest("GET", "/api/redis/session%3A42", null));
+        assertEquals("로그인 토큰 abc", got.get("value"));
+        long remaining = (Long) got.get("remainingTTL");
+        assertTrue(remaining > 0 && remaining <= 60, "remainingTTL=" + remaining);
+
+        // TTL 없이 저장하면 만료 없음(-1). 값은 문자열이 아닌 JSON 도 된다
+        assertEquals(-1L, json(redisRequest("POST", "/api/redis", "{\"key\":\"n\",\"value\":{\"a\":[1,2]}}")).get("ttl"));
+        Map<String, Object> plain = json(redisRequest("GET", "/api/redis/n", null));
+        assertEquals(-1L, plain.get("remainingTTL"));
+        assertEquals(Map.of("a", List.of(1L, 2L)), plain.get("value"));
+
+        assertEquals(200, redisRequest("DELETE", "/api/redis/n", null).statusCode());
+        assertEquals(404, redisRequest("DELETE", "/api/redis/n", null).statusCode());
+        assertEquals(404, redisRequest("GET", "/api/redis/n", null).statusCode());
+        assertEquals(404, redisRequest("GET", "/api/redis/never-set", null).statusCode());
+
+        // 캐시에 무엇을 넣어도 DBMS 의 테이블에는 아무 변화가 없다
+        assertEquals(List.of(List.of(0L)), result(postSql("SELECT COUNT(*) FROM users"), 0).get("rows"));
+    }
+
+    @Test
+    @DisplayName("/api/redis: key 누락 / value 누락 / 잘못된 JSON / 잘못된 ttl → 400")
+    void redisBadRequests() {
+        assertEquals(400, redisRequest("POST", "/api/redis", "{\"value\":\"v\"}").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "{\"key\":\"  \",\"value\":\"v\"}").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "{\"key\":\"k\"}").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "{not json").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "{\"key\":\"k\",\"value\":\"v\",\"ttl\":\"x\"}").statusCode());
+        assertEquals(400, redisRequest("POST", "/api/redis", "{\"key\":\"k\",\"value\":\"v\",\"ttl\":-5}").statusCode());
+        assertEquals(405, redisRequest("PUT", "/api/redis", "{}").statusCode());
+    }
+
+    @Test
+    @DisplayName("/api/redis: TTL 만료 후 GET → 404")
+    void redisTtlExpiry() throws InterruptedException {
+        assertEquals(201, redisRequest("POST", "/api/redis", "{\"key\":\"temp\",\"value\":1,\"ttl\":1}").statusCode());
+        assertEquals(200, redisRequest("GET", "/api/redis/temp", null).statusCode());
+        Thread.sleep(1_300);
+        assertEquals(404, redisRequest("GET", "/api/redis/temp", null).statusCode());
+    }
+
+    @Test
+    @DisplayName("/api/redis: 목록/통계, FLUSH 해도 DBMS 데이터는 그대로이고 쿼리는 다시 MISS 부터 시작한다")
+    void redisListAndFlush() {
+        postSql("INSERT INTO users VALUES ('kim', 20)");
+        String sql = "SELECT name FROM users WHERE age = 20";
+        postSql(sql);
+        redisRequest("POST", "/api/redis", "{\"key\":\"k\",\"value\":\"v\"}");
+
+        Map<String, Object> listing = json(redisRequest("GET", "/api/redis", null));
+        assertEquals(2L, listing.get("count")); // 직접 넣은 키 1개 + 캐시된 쿼리 결과 1개
+        Map<?, ?> stats = (Map<?, ?>) listing.get("stats");
+        assertEquals(2L, stats.get("size"));
+        assertEquals(16L, stats.get("segmentCount"));
+        assertTrue(listing.containsKey("buckets") && listing.containsKey("segments"));
+
+        HttpResponse<String> flush = redisRequest("DELETE", "/api/redis", null);
+        assertEquals(200, flush.statusCode());
+        assertEquals("flushed", json(flush).get("message"));
+        assertEquals(0L, json(redisRequest("GET", "/api/redis", null)).get("count"));
+        assertEquals(404, redisRequest("GET", "/api/redis/k", null).statusCode());
+
+        Map<String, Object> again = result(postSql(sql), 0);
+        assertEquals("MISS", again.get("cache"));
+        assertEquals(List.of(List.of("kim")), again.get("rows"));
+    }
+
     @Test
     @DisplayName("과부하: 워커와 대기 큐가 모두 차면 503 으로 즉시 거절하고, 풀리면 다시 정상 처리한다")
     void rejectsWith503WhenPoolIsFull() throws Exception {

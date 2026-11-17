@@ -2,6 +2,8 @@ package com.minidbms;
 
 import com.minidbms.dbms.bench.Benchmark;
 import com.minidbms.dbms.DbException;
+import com.minidbms.redis.core.ConcurrentHashMap;
+import com.minidbms.redis.core.TTLManager;
 import com.minidbms.dbms.cli.TablePrinter;
 import com.minidbms.dbms.engine.Database;
 import com.minidbms.dbms.engine.QueryResult;
@@ -43,9 +45,11 @@ public final class Main {
             "  bench [--rows N] [--data-dir DIR]                    Insert N rows (default 1000000) and compare",
             "                                                       indexed vs. linear SELECT",
             "  serve [--port P] [--threads T] [--queue Q] [--data-dir DIR]",
-            "                                                       Start the HTTP API server",
+            "        [--cache-ttl SECONDS]                          Start the HTTP API server",
+            "                                                       (DBMS + Mini Redis cache)",
             "",
-            "Defaults: --data-dir data, --port 8080, --threads 8, --queue 128");
+            "Defaults: --data-dir data, --port 8080, --threads 8, --queue 128,",
+            "          --cache-ttl 30 (seconds a slow SELECT result stays cached; 0 = off)");
 
     private Main() {
     }
@@ -179,26 +183,47 @@ public final class Main {
         int threads = intOption(options, "threads", 8, 1, 1024);
         int queue = intOption(options, "queue", 128, 1, 1_000_000);
 
+        int cacheTtl = intOption(options, "cache-ttl", ApiServer.DEFAULT_QUERY_CACHE_TTL_SECONDS, 0, 86_400);
+
+        // ---- 이 메서드가 yj-mini-redis 의 AppConfig 역할을 한다: 객체를 만들고 서로 연결한다 ----
+
+        // [DBMS] 디스크에 저장되는 영구 데이터
         Database database = new Database(dataDir(options));
+        SqlEngine engine = new SqlEngine(database);
+
+        // [미니 레디스] 메모리에만 있는 임시 캐시. AppConfig 의 store() / ttlManager() 와 같은 순서로 만든다.
+        // (그때는 Spring 이 @PostConstruct 로 start() 를 불렀고, 여기서는 직접 부른다)
+        ConcurrentHashMap store = new ConcurrentHashMap(
+                ApiServer.DEFAULT_SEGMENTS, ApiServer.DEFAULT_CAPACITY_PER_SEGMENT);
+        TTLManager ttlManager = new TTLManager(store, ApiServer.DEFAULT_TTL_INTERVAL_MS);
+        ttlManager.start();
+
+        // [서버] DBMS 와 미니 레디스는 서로를 모른다. 둘을 함께 쓰는 것은 서버 안의 CachedQueryService 뿐이다.
         ApiServer server;
         try {
-            server = new ApiServer(new SqlEngine(database), port, threads, queue);
+            server = new ApiServer(engine, port, threads, queue, store, ttlManager, cacheTtl);
         } catch (IOException e) {
+            ttlManager.stop();
             database.close();
             throw new DbException("Cannot listen on port " + port + ": " + e.getMessage());
         }
 
-        // Ctrl+C 로 끌 때: 처리 중인 요청을 마치고 파일을 안전하게 닫는다
+        // Ctrl+C 로 끌 때: 처리 중인 요청을 마치고 파일을 안전하게 닫는다 (캐시 내용은 그냥 버려진다)
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
             server.close();
+            ttlManager.stop();
             database.close();
         }, "shutdown"));
 
         server.start();
         System.out.println("Mini DBMS API server listening on http://localhost:" + server.port());
-        System.out.println("  worker threads: " + threads + ", queue capacity: " + queue
-                + ", data dir: " + database.directory().toAbsolutePath());
-        System.out.println("  POST /query | GET /tables | GET /stats | GET /health   (Ctrl+C to stop)");
+        System.out.println("  worker threads: " + threads + ", queue capacity: " + queue);
+        System.out.println("  [DBMS]       data dir: " + database.directory().toAbsolutePath()
+                + "   POST /query | GET /tables");
+        System.out.println("  [Mini Redis] segments: " + store.segmentCount() + ", query cache: "
+                + (cacheTtl > 0 ? "TTL " + cacheTtl + "s" : "off")
+                + "   POST|GET|DELETE /api/redis | GET|DELETE /api/redis/{key}");
+        System.out.println("  [Server]     GET /stats | GET /health   (Ctrl+C to stop)");
 
         // accept 스레드가 살아 있는 동안 main 은 여기서 기다린다
         try {
