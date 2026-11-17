@@ -6,6 +6,7 @@ import com.minidbms.dbms.cli.TablePrinter;
 import com.minidbms.dbms.engine.Database;
 import com.minidbms.dbms.engine.QueryResult;
 import com.minidbms.dbms.engine.SqlEngine;
+import com.minidbms.server.ApiServer;
 import com.minidbms.dbms.sql.Parser;
 import com.minidbms.dbms.sql.Statement;
 
@@ -28,6 +29,7 @@ import java.util.Map;
  *   run &lt;file.sql&gt;   SQL 파일을 읽어 실행        (Phase 1)
  *   repl             대화형으로 SQL 입력          (Phase 1)
  *   bench            대량 삽입 + 인덱스 성능 비교  (Phase 2)
+ *   serve            HTTP API 서버 실행           (Phase 3)
  * </pre>
  */
 public final class Main {
@@ -40,8 +42,10 @@ public final class Main {
             "  repl [--data-dir DIR]                                Interactive SQL shell",
             "  bench [--rows N] [--data-dir DIR]                    Insert N rows (default 1000000) and compare",
             "                                                       indexed vs. linear SELECT",
+            "  serve [--port P] [--threads T] [--queue Q] [--data-dir DIR]",
+            "                                                       Start the HTTP API server",
             "",
-            "Defaults: --data-dir data (bench: bench-data)");
+            "Defaults: --data-dir data, --port 8080, --threads 8, --queue 128");
 
     private Main() {
     }
@@ -83,6 +87,8 @@ public final class Main {
                 return repl(parseOptions(args, 1));
             case "bench":
                 return bench(parseOptions(args, 1));
+            case "serve":
+                return serve(parseOptions(args, 1));
             default:
                 throw new IllegalArgumentException("Unknown command: " + command);
         }
@@ -158,13 +164,48 @@ public final class Main {
     }
 
     // ------------------------------------------------------------------
-    // bench
+    // bench / serve
     // ------------------------------------------------------------------
 
     private static int bench(Map<String, String> options) throws IOException {
         long rows = intOption(options, "rows", 1_000_000, 1, 100_000_000);
         Path dir = Paths.get(options.getOrDefault("data-dir", "bench-data"));
         Benchmark.run(dir, rows, System.out);
+        return 0;
+    }
+
+    private static int serve(Map<String, String> options) throws IOException {
+        int port = intOption(options, "port", 8080, 0, 65535);
+        int threads = intOption(options, "threads", 8, 1, 1024);
+        int queue = intOption(options, "queue", 128, 1, 1_000_000);
+
+        Database database = new Database(dataDir(options));
+        ApiServer server;
+        try {
+            server = new ApiServer(new SqlEngine(database), port, threads, queue);
+        } catch (IOException e) {
+            database.close();
+            throw new DbException("Cannot listen on port " + port + ": " + e.getMessage());
+        }
+
+        // Ctrl+C 로 끌 때: 처리 중인 요청을 마치고 파일을 안전하게 닫는다
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            server.close();
+            database.close();
+        }, "shutdown"));
+
+        server.start();
+        System.out.println("Mini DBMS API server listening on http://localhost:" + server.port());
+        System.out.println("  worker threads: " + threads + ", queue capacity: " + queue
+                + ", data dir: " + database.directory().toAbsolutePath());
+        System.out.println("  POST /query | GET /tables | GET /stats | GET /health   (Ctrl+C to stop)");
+
+        // accept 스레드가 살아 있는 동안 main 은 여기서 기다린다
+        try {
+            Thread.currentThread().join();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         return 0;
     }
 
