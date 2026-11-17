@@ -114,7 +114,30 @@ class SqlEngineTest {
     // ---------------- SELECT ----------------
 
     @Test
-    @DisplayName("SELECT: 없는 id, id 조건 + 다른 조건, 모순된 조건")
+    @DisplayName("SELECT: id = ? 는 인덱스(INDEX_POINT), 다른 컬럼 조건은 선형 탐색(FULL_SCAN)")
+    void accessPathSelection() {
+        insertSample();
+
+        QueryResult byId = engine.execute("SELECT name FROM users WHERE id = 3");
+        assertEquals(QueryResult.INDEX_POINT, byId.accessPath());
+        assertEquals(List.of("name"), byId.columns());
+        assertArrayEquals(new Object[]{"park"}, byId.rows().get(0));
+
+        QueryResult byName = engine.execute("SELECT id FROM users WHERE name = 'park'");
+        assertEquals(QueryResult.FULL_SCAN, byName.accessPath());
+        assertArrayEquals(new Object[]{3L}, byName.rows().get(0));
+
+        QueryResult range = engine.execute("SELECT id FROM users WHERE id >= 2 AND id < 5");
+        assertEquals(QueryResult.INDEX_RANGE, range.accessPath());
+        assertEquals(List.of(2L, 3L, 4L), ids(range));
+
+        assertEquals(QueryResult.INDEX_RANGE, engine.execute("SELECT * FROM users WHERE id BETWEEN 2 AND 3").accessPath());
+        assertEquals(QueryResult.FULL_SCAN, engine.execute("SELECT * FROM users").accessPath());
+        assertEquals(QueryResult.FULL_SCAN, engine.execute("SELECT * FROM users WHERE id != 2").accessPath());
+    }
+
+    @Test
+    @DisplayName("SELECT: 없는 id, 인덱스 조건 + 다른 조건, 모순된 조건")
     void indexEdgeCases() {
         insertSample();
         assertTrue(rows("SELECT * FROM users WHERE id = 999").isEmpty());
@@ -162,6 +185,30 @@ class SqlEngineTest {
     }
 
     @Test
+    @DisplayName("인덱스를 꺼도 결과는 같고 접근 경로만 FULL_SCAN 으로 바뀐다")
+    void indexOnAndOffReturnSameRows() {
+        insertSample();
+        String[] queries = {
+                "SELECT * FROM users WHERE id = 4",
+                "SELECT * FROM users WHERE id BETWEEN 2 AND 4",
+                "SELECT * FROM users WHERE id > 1 AND age = 30",
+                "SELECT * FROM users WHERE id = 77",
+        };
+        for (String sql : queries) {
+            List<Object[]> withIndex = rows(sql);
+            engine.setIndexEnabled(false);
+            QueryResult withoutIndex = engine.execute(sql);
+            engine.setIndexEnabled(true);
+
+            assertEquals(QueryResult.FULL_SCAN, withoutIndex.accessPath());
+            assertEquals(withIndex.size(), withoutIndex.rows().size(), sql);
+            for (int i = 0; i < withIndex.size(); i++) {
+                assertArrayEquals(withIndex.get(i), withoutIndex.rows().get(i), sql);
+            }
+        }
+    }
+
+    @Test
     @DisplayName("최대 행 수 제한에 걸리면 truncated 표시")
     void maxResultRows() {
         insertSample();
@@ -187,13 +234,14 @@ class SqlEngineTest {
     // ---------------- 영속성 ----------------
 
     @Test
-    @DisplayName("재시작: 파일에서 데이터를 다시 읽고, id 가 이어진다")
+    @DisplayName("재시작: 파일에서 데이터를 다시 읽고, 인덱스를 재구성하고, id 가 이어진다")
     void persistenceAcrossRestart() {
         insertSample();
         reopen();
 
         assertEquals(5L, rows("SELECT COUNT(*) FROM users").get(0)[0]);
         QueryResult byId = engine.execute("SELECT name FROM users WHERE id = 4");
+        assertEquals(QueryResult.INDEX_POINT, byId.accessPath());
         assertArrayEquals(new Object[]{"choi"}, byId.rows().get(0));
 
         assertEquals(6L, engine.execute("INSERT INTO users VALUES ('new', 1, 1.0)").firstInsertId());
@@ -218,7 +266,7 @@ class SqlEngineTest {
     }
 
     @Test
-    @DisplayName("청크 경계를 넘는 긴 행과 많은 행도 정확히 읽는다")
+    @DisplayName("청크 경계를 넘는 긴 행과 많은 행: 선형 탐색과 인덱스 조회가 모두 정확하다")
     void largeRowsAcrossChunkBoundaries() {
         engine.execute("CREATE TABLE docs (body TEXT)");
         String big = "x".repeat(70_000); // 스캔 버퍼(64KB)보다 큰 행

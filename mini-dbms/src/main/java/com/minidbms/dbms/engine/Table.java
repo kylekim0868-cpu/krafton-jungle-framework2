@@ -1,6 +1,7 @@
 package com.minidbms.dbms.engine;
 
 import com.minidbms.dbms.DbException;
+import com.minidbms.dbms.index.BPlusTree;
 import com.minidbms.dbms.storage.RowCodec;
 import com.minidbms.dbms.storage.Schema;
 
@@ -16,12 +17,13 @@ import java.util.List;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 테이블 하나 = 데이터 파일 하나({@code <table>.tbl}).
+ * 테이블 하나 = 데이터 파일 하나({@code <table>.tbl}) + 메모리의 B+ 트리 인덱스.
  *
  * <ul>
  *   <li>데이터 파일은 뒤에만 붙여 쓰는(append-only) 텍스트 파일이다. 한 줄이 행 하나.</li>
- *   <li>SELECT 는 파일을 처음부터 끝까지 읽으며 조건에 맞는 행을 찾는다 (선형 탐색).</li>
- *   <li>프로그램을 켤 때 파일을 한 번 훑어서 행 수와 다음 id 를 알아낸다.</li>
+ *   <li>인덱스는 {@code id → 그 줄이 시작하는 바이트 위치} 를 기억한다.
+ *       그래서 {@code WHERE id = ?} 는 파일을 처음부터 읽지 않고 해당 위치로 바로 점프한다.</li>
+ *   <li>인덱스는 메모리에만 있으므로, 프로그램을 켤 때 파일을 한 번 훑어서 다시 만든다.</li>
  * </ul>
  *
  * <p><b>동시성</b>: 테이블마다 읽기-쓰기 락을 하나 둔다.
@@ -46,13 +48,13 @@ public final class Table implements Closeable {
     private final Schema schema;
     private final Path dataFile;
     private final FileChannel channel;
+    private final BPlusTree index = new BPlusTree();
     /** fair=true: 읽기 요청이 계속 들어와도 쓰기 요청이 굶지 않게 한다 */
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock(true);
 
     /** 유효한 데이터의 끝 위치. 다음 INSERT 는 여기에 기록된다. */
     private long fileLength;
     private long nextId = 1;
-    private long rowCount;
 
     public Table(Path dataFile, Schema schema) throws IOException {
         this.schema = schema;
@@ -68,7 +70,7 @@ public final class Table implements Closeable {
     }
 
     /**
-     * 시작 시 복구: 파일 전체를 훑어 행 수를 세고 다음 id 를 정한다.
+     * 시작 시 복구: 파일 전체를 훑어 인덱스를 다시 만들고 다음 id 를 정한다.
      * 마지막 줄이 줄바꿈 없이 끝났다면 쓰는 도중 프로그램이 죽은 것이므로 그 조각은 잘라 낸다.
      */
     private void recover() throws IOException {
@@ -76,7 +78,7 @@ public final class Table implements Closeable {
         long[] maxId = {0};
         long validEnd = scanLines(physicalSize, (offset, line) -> {
             long id = RowCodec.decodeId(line);
-            rowCount++;
+            index.insert(id, offset);
             maxId[0] = Math.max(maxId[0], id);
             return true;
         });
@@ -105,11 +107,13 @@ public final class Table implements Closeable {
         lock.writeLock().lock();
         try {
             long firstId = nextId;
+            long[] offsets = new long[rows.size()];
             ByteArrayOutputStream batch = new ByteArrayOutputStream(rows.size() * 48);
 
             for (int i = 0; i < rows.size(); i++) {
                 Object[] row = rows.get(i);
                 row[0] = firstId + i;
+                offsets[i] = fileLength + batch.size();
                 byte[] line = RowCodec.encode(row).getBytes(StandardCharsets.UTF_8);
                 batch.write(line, 0, line.length);
                 batch.write('\n');
@@ -123,8 +127,10 @@ public final class Table implements Closeable {
                 position += channel.write(buffer, position);
             }
 
-            // 2) 쓰기에 성공한 뒤에만 카운터를 갱신한다.
-            rowCount += rows.size();
+            // 2) 쓰기에 성공한 뒤에만 인덱스와 카운터를 갱신한다.
+            for (int i = 0; i < offsets.length; i++) {
+                index.insert(firstId + i, offsets[i]);
+            }
             fileLength = position;
             nextId = firstId + rows.size();
             return firstId;
@@ -138,6 +144,43 @@ public final class Table implements Closeable {
     // ------------------------------------------------------------------
     // 읽기
     // ------------------------------------------------------------------
+
+    /** 인덱스로 행 하나를 찾는다: B+ 트리에서 파일 위치를 얻고 → 그 위치의 한 줄만 읽는다. */
+    public Object[] findById(long id) {
+        lock.readLock().lock();
+        try {
+            long offset = index.search(id);
+            if (offset == BPlusTree.NOT_FOUND) {
+                return null;
+            }
+            return RowCodec.decode(readLineAt(offset), schema);
+        } catch (IOException e) {
+            throw readError(e);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    /** 인덱스 범위 검색: low <= id <= high 인 행을 id 오름차순으로 방문한다. */
+    public void scanIdRange(long low, long high, RowVisitor visitor) {
+        lock.readLock().lock();
+        try {
+            IOException[] failure = {null};
+            index.rangeScan(low, high, (id, offset) -> {
+                try {
+                    return visitor.visit(RowCodec.decode(readLineAt(offset), schema));
+                } catch (IOException e) {
+                    failure[0] = e;
+                    return false;
+                }
+            });
+            if (failure[0] != null) {
+                throw readError(failure[0]);
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
 
     /** 선형 탐색(Full Scan): 파일을 처음부터 끝까지 읽으며 모든 행을 방문한다. */
     public void scan(RowVisitor visitor) {
@@ -154,7 +197,16 @@ public final class Table implements Closeable {
     public long rowCount() {
         lock.readLock().lock();
         try {
-            return rowCount;
+            return index.size();
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public int indexHeight() {
+        lock.readLock().lock();
+        try {
+            return index.height();
         } finally {
             lock.readLock().unlock();
         }
@@ -163,6 +215,25 @@ public final class Table implements Closeable {
     // ------------------------------------------------------------------
     // 파일 읽기 도우미
     // ------------------------------------------------------------------
+
+    /** offset 에서 시작하는 한 줄을 읽는다. 줄 길이를 모르므로 작게 읽어 보고 모자라면 더 크게 읽는다. */
+    private String readLineAt(long offset) throws IOException {
+        int capacity = 256;
+        while (true) {
+            int length = (int) Math.min(capacity, fileLength - offset);
+            byte[] bytes = new byte[length];
+            readFully(ByteBuffer.wrap(bytes), offset);
+            for (int i = 0; i < length; i++) {
+                if (bytes[i] == '\n') {
+                    return new String(bytes, 0, i, StandardCharsets.UTF_8);
+                }
+            }
+            if (offset + length >= fileLength) {
+                throw new DbException("Corrupt data file " + dataFile.getFileName() + " at offset " + offset);
+            }
+            capacity *= 4;
+        }
+    }
 
     private void readFully(ByteBuffer buffer, long position) throws IOException {
         while (buffer.hasRemaining()) {

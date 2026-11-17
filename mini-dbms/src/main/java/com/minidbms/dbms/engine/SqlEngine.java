@@ -17,11 +17,19 @@ import java.util.List;
  * 상태를 거의 갖지 않으므로(설정값 두 개뿐) 여러 스레드가 동시에 호출해도 안전하다.
  * 실제 데이터 보호는 {@link Table} 의 읽기-쓰기 락이 담당한다.</p>
  *
- * <p>SELECT 는 항상 파일 전체를 읽으며 WHERE 조건을 검사한다 (FULL_SCAN).</p>
+ * <p><b>SELECT 의 접근 경로 선택</b> (WHERE 절의 id 조건을 보고 결정)</p>
+ * <ol>
+ *   <li>{@code id = 값} 이 있으면 → INDEX_POINT: B+ 트리로 한 행만 읽는다.</li>
+ *   <li>{@code id >, >=, <, <=, BETWEEN} 이 있으면 → INDEX_RANGE: B+ 트리의 리프를 따라 범위만 읽는다.</li>
+ *   <li>그 외 → FULL_SCAN: 파일 전체를 읽으며 조건을 검사한다.</li>
+ * </ol>
+ * 어느 경로든 읽어 온 행에 WHERE 조건 전체를 다시 검사하므로 결과는 항상 같고, 속도만 달라진다.
  */
 public final class SqlEngine {
 
     private final Database database;
+    /** false 로 바꾸면 항상 FULL_SCAN 한다 (인덱스 사용/미사용 성능 비교용) */
+    private volatile boolean indexEnabled = true;
     /** SELECT 한 번이 돌려줄 수 있는 최대 행 수 (API 서버가 메모리 보호용으로 설정) */
     private volatile long maxResultRows = Long.MAX_VALUE;
 
@@ -31,6 +39,10 @@ public final class SqlEngine {
 
     public Database database() {
         return database;
+    }
+
+    public void setIndexEnabled(boolean indexEnabled) {
+        this.indexEnabled = indexEnabled;
     }
 
     public void setMaxResultRows(long maxResultRows) {
@@ -195,7 +207,48 @@ public final class SqlEngine {
             conditions.add(new BoundCondition(idx, c.op(), c.value()));
         }
 
-        // 3) 행을 모으는 수집기 (조건 검사 → LIMIT → 컬럼 선택)
+        // 3) id 조건을 분석해 접근 경로 결정
+        Long pointId = null;
+        long low = Long.MIN_VALUE;
+        long high = Long.MAX_VALUE;
+        boolean empty = false; // 조건만 봐도 결과가 없음을 알 수 있는 경우
+        for (BoundCondition c : conditions) {
+            if (c.column() != 0 || !(c.value() instanceof Long v)) {
+                continue;
+            }
+            switch (c.op()) {
+                case EQ:
+                    if (pointId == null) {
+                        pointId = v;
+                    }
+                    break;
+                case GE:
+                    low = Math.max(low, v);
+                    break;
+                case GT:
+                    if (v == Long.MAX_VALUE) {
+                        empty = true;
+                    } else {
+                        low = Math.max(low, v + 1);
+                    }
+                    break;
+                case LE:
+                    high = Math.min(high, v);
+                    break;
+                case LT:
+                    if (v == Long.MIN_VALUE) {
+                        empty = true;
+                    } else {
+                        high = Math.min(high, v - 1);
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        boolean hasRange = low != Long.MIN_VALUE || high != Long.MAX_VALUE || empty;
+
+        // 4) 행을 모으는 수집기 (조건 검사 → LIMIT → 컬럼 선택)
         long limit = select.limit() == null ? Long.MAX_VALUE : select.limit();
         long cap = maxResultRows;
         List<Object[]> out = new ArrayList<>();
@@ -225,14 +278,25 @@ public final class SqlEngine {
             return matched[0] < limit;
         };
 
-        // 4) 실행
+        // 5) 접근 경로에 따라 실행
         String accessPath;
         if (countOnly && conditions.isEmpty()) {
-            // 조건 없는 COUNT(*) 는 테이블이 기억하고 있는 행 수를 그대로 쓴다
+            // 조건 없는 COUNT(*) 는 인덱스가 알고 있는 개수를 그대로 쓴다
             accessPath = QueryResult.METADATA;
             matched[0] = table.rowCount();
         } else if (!countOnly && limit == 0) {
             accessPath = QueryResult.METADATA;
+        } else if (indexEnabled && pointId != null) {
+            accessPath = QueryResult.INDEX_POINT;
+            Object[] row = table.findById(pointId);
+            if (row != null) {
+                collector.visit(row);
+            }
+        } else if (indexEnabled && hasRange) {
+            accessPath = QueryResult.INDEX_RANGE;
+            if (!empty && low <= high) {
+                table.scanIdRange(low, high, collector);
+            }
         } else {
             accessPath = QueryResult.FULL_SCAN;
             table.scan(collector);
