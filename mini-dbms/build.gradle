@@ -1,0 +1,54 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'com.minidbms'
+version = '1.0.0'
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 실행 코드는 외부 라이브러리 없이 JDK 만 사용한다. 테스트에만 JUnit 5 사용.
+    testImplementation platform('org.junit:junit-bom:5.10.3')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    // 미니 레디스 테스트는 yj-mini-redis 의 것을 그대로 가져왔고, 그 테스트가 AssertJ 를 쓴다
+    testImplementation 'org.assertj:assertj-core:3.26.3'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+application {
+    mainClass = 'com.minidbms.Main'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+
+jar {
+    // java -jar build/libs/mini-dbms-1.0.0.jar 로 바로 실행 가능
+    manifest {
+        attributes 'Main-Class': 'com.minidbms.Main'
+    }
+}
+
+run {
+    // ./gradlew run --args="repl" 에서 키보드 입력을 받을 수 있게 한다
+    standardInput = System.in
+}
+
+test {
+    useJUnitPlatform()
+    maxHeapSize = '1g'
+    testLogging {
+        events 'passed', 'skipped', 'failed'
+        exceptionFormat 'full'
+    }
+}
