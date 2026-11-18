@@ -9,7 +9,10 @@ import java.util.*;
 public final class Database implements AutoCloseable {
     private final DirectoryLock ownership;
     private final TableFile table;
-    private final BPlusTree<TableFile.Pointer> primary = new BPlusTree<>(63);
+    private static final System.Logger LOG = System.getLogger(Database.class.getName());
+    private final IndexCheckpoint checkpoint;
+    private final BPlusTree<TableFile.Pointer> primary;
+    private final long checkpointEntries;
     private long nextId = 1;
     private boolean closed;
     private boolean writesFailed; // 저장 과정에서 오류가 발생한 이후, 데이터 정합성이 확인되지 않은 상태로 추가 작업이 실행되는 것을 막기 위한 보호 장치
@@ -20,10 +23,14 @@ public final class Database implements AutoCloseable {
         ownership = DirectoryLock.acquire(directory);
         TableFile opened = null;
         try {
-            // 전달받은 데이터 디렉터리에서 "products.jsonl"파일의 경로를 생성한다. 해당 경로와 파일 쓰기 기능(Writer)을 TableFile 생성자에 전달해 파일 기반 테이블 저장소를 초기화한다.
-            opened = new TableFile(directory.resolve("products.jsonl"), writer);
-            // 파일에 저장된 레코드를 순서대로 읽고 primary.put()은 각 레코드의 ID와 파일 위치를 B+Tree에 등록.
-            opened.scan((product, pointer) -> {
+            var path = directory.resolve("products.jsonl");
+            opened = new TableFile(path, writer);
+            checkpoint = new IndexCheckpoint(path);
+            var snapshot = checkpoint.load();
+            primary = snapshot.map(IndexCheckpoint.Snapshot::tree).orElseGet(IndexCheckpoint::emptyTree);
+            checkpointEntries = snapshot.isPresent() ? primary.size() : -1;
+            nextId = primary.size() + 1;
+            opened.scanFrom(snapshot.map(IndexCheckpoint.Snapshot::offset).orElse(0L), (product, pointer) -> {
                 if (product.id() != nextId) throw new IOException("nonsequential or duplicate row id"); // 파일에 저장된 ID가 1부터 중복이나 누락 없이 순서대로 기록되어 있는지 검증하는 코드
                 primary.put(product.id(), pointer);
                 try { nextId = Math.incrementExact(nextId); }
@@ -158,6 +165,17 @@ public final class Database implements AutoCloseable {
     @Override public synchronized void close() throws IOException {
         if (closed) return;
         closed = true;
-        try { table.close(); } finally { ownership.close(); }
+        try {
+            table.close(); // Persist the authoritative data before publishing its checkpoint.
+            if (!writesFailed && !table.writesFailed() && checkpointEntries != nextId - 1) {
+                try {
+                    checkpoint.save(primary);
+                } catch (IOException failure) {
+                    LOG.log(System.Logger.Level.WARNING, "Could not publish index checkpoint", failure);
+                }
+            }
+        } finally {
+            ownership.close();
+        }
     }
 }

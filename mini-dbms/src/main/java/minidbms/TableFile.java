@@ -5,6 +5,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 import java.io.*;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.file.*;
 import static java.nio.file.StandardOpenOption.*;
@@ -13,7 +14,7 @@ import static java.nio.file.StandardOpenOption.*;
 final class TableFile implements AutoCloseable {
     record Pointer(long offset, int length) { }
     @FunctionalInterface interface Visitor { boolean visit(Product product, Pointer pointer) throws IOException; }
-    private static final int MAX_ROW = 1_048_576;
+    static final int MAX_ROW = 1_048_576;
     private static final JsonMapper JSON = JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
             DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY).build();
     @FunctionalInterface interface Writer { int write(FileChannel channel, ByteBuffer bytes) throws IOException; }
@@ -45,10 +46,16 @@ final class TableFile implements AutoCloseable {
     }
 
     void scan(Visitor visitor) throws IOException {
-        try (var input = new BufferedInputStream(Files.newInputStream(path), 65_536)) {
+        scanFrom(0, visitor);
+    }
+
+    void scanFrom(long offset, Visitor visitor) throws IOException {
+        // A separate channel keeps scan positions independent of append and indexed reads.
+        try (var scanChannel = FileChannel.open(path, READ)) {
+            scanChannel.position(offset);
+            var input = Channels.newInputStream(scanChannel);
             var row = new ByteArrayOutputStream();
             byte[] buffer = new byte[65_536];
-            long offset = 0;
             for (int count; (count = input.read(buffer)) != -1;) {
                 for (int i = 0; i < count; i++) {
                     if (buffer[i] == '\n') {
