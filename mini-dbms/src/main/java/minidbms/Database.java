@@ -4,8 +4,9 @@ import minidbms.index.BPlusTree;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-/** 단일 데이터 디렉터리의 products 테이블. 명령 하나가 공통 모니터 안에서 실행된다. */
+/** 단일 데이터 디렉터리의 products 테이블. SELECT는 공유 락을, 변경과 종료는 배타 락을 사용한다. */
 public final class Database implements AutoCloseable {
     private final DirectoryLock ownership;
     private final TableFile table;
@@ -13,9 +14,12 @@ public final class Database implements AutoCloseable {
     private final IndexCheckpoint checkpoint;
     private final BPlusTree<TableFile.Pointer> primary;
     private final long checkpointEntries;
+    // Prevent readers arriving behind a queued writer or close from extending its wait.
+    private final ReentrantReadWriteLock dataLock = new ReentrantReadWriteLock(true);
     private long nextId = 1;
     private boolean closed;
-    private boolean writesFailed; // 저장 과정에서 오류가 발생한 이후, 데이터 정합성이 확인되지 않은 상태로 추가 작업이 실행되는 것을 막기 위한 보호 장치
+    // A SELECT can detect a storage failure while other readers hold the shared lock.
+    private volatile boolean writesFailed;
 
     public Database(Path directory) throws IOException { this(directory, java.nio.channels.FileChannel::write); }
 
@@ -51,24 +55,37 @@ public final class Database implements AutoCloseable {
         return execute(statement, limits, true);
     }
 
-    synchronized QueryResult execute(SqlStatement statement, QueryLimits limits, boolean useIndex) throws IOException {
+    QueryResult execute(SqlStatement statement, QueryLimits limits, boolean useIndex) throws IOException {
         Objects.requireNonNull(limits, "limits");
-        requireAvailable();
+        var lock = statement instanceof SqlStatement.Select ? dataLock.readLock() : dataLock.writeLock();
+        lock.lock();
         try {
+            requireAvailable();
             if (statement instanceof SqlStatement.Insert insert) return insert(insert);
-            if (statement instanceof SqlStatement.Select select) return select(select, limits, useIndex);
+            if (statement instanceof SqlStatement.Select select) {
+                var result = select(select, limits, useIndex);
+                requireAvailable(); // Another reader may have detected a storage failure.
+                return result;
+            }
             throw new IllegalArgumentException("unknown statement");
         } catch (IOException failure) {
-            // A failed SELECT must not allow apparently healthy index misses or later writes.
             writesFailed = true;
             throw failure;
+        } finally {
+            lock.unlock();
         }
     }
 
     /** Captured under the same lock as INSERT, including the file and index update. */
-    public synchronized long revision() throws IOException {
-        requireAvailable();
-        return nextId - 1;
+    public long revision() throws IOException {
+        var lock = dataLock.readLock();
+        lock.lock();
+        try {
+            requireAvailable();
+            return nextId - 1;
+        } finally {
+            lock.unlock();
+        }
     }
 
     private void requireAvailable() throws IOException {
@@ -155,27 +172,43 @@ public final class Database implements AutoCloseable {
         return Collections.unmodifiableMap(row);
     }
 
-    public synchronized BPlusTree.Structure validateIndex() {
-        if (closed || writesFailed || table.writesFailed()) throw new IllegalStateException("database unavailable");
-        var structure = primary.validate();
-        if (structure.entries() != nextId - 1) throw new IllegalStateException("index size mismatch");
-        return structure;
+    public BPlusTree.Structure validateIndex() {
+        var lock = dataLock.readLock();
+        lock.lock();
+        try {
+            if (closed || writesFailed || table.writesFailed()) throw new IllegalStateException("database unavailable");
+            var structure = primary.validate();
+            if (structure.entries() != nextId - 1) throw new IllegalStateException("index size mismatch");
+            return structure;
+        } finally {
+            lock.unlock();
+        }
     }
 
-    @Override public synchronized void close() throws IOException {
-        if (closed) return;
-        closed = true;
+    @Override public void close() throws IOException {
+        var lock = dataLock.writeLock();
+        lock.lock();
         try {
-            table.close(); // Persist the authoritative data before publishing its checkpoint.
-            if (!writesFailed && !table.writesFailed() && checkpointEntries != nextId - 1) {
-                try {
-                    checkpoint.save(primary);
-                } catch (IOException failure) {
-                    LOG.log(System.Logger.Level.WARNING, "Could not publish index checkpoint", failure);
-                }
+            if (closed) return;
+            closed = true;
+            try {
+                closeTableAndCheckpoint();
+            } finally {
+                ownership.close();
             }
         } finally {
-            ownership.close();
+            lock.unlock();
+        }
+    }
+
+    private void closeTableAndCheckpoint() throws IOException {
+        table.close(); // Persist the authoritative data before publishing its checkpoint.
+        if (!writesFailed && !table.writesFailed() && checkpointEntries != nextId - 1) {
+            try {
+                checkpoint.save(primary);
+            } catch (IOException failure) {
+                LOG.log(System.Logger.Level.WARNING, "Could not publish index checkpoint", failure);
+            }
         }
     }
 }
