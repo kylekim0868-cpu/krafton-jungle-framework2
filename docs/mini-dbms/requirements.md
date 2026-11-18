@@ -9,6 +9,7 @@ DBMS-01~DBMS-03 구현을 이 프로젝트의 `mini-dbms/`에서 독립적으로
 | DBMS-01 | 직접 구현한 SQL 처리기·테이블 파일·CLI | INSERT 성공 후 새 JVM SELECT로 같은 행 조회, 파서/파일/오류 검증 | [KJF-59](https://kylekim0868.atlassian.net/browse/KJF-59) | `feat/KJF-59-ym-sql-file` |
 | DBMS-02 | 직접 구현한 메모리 B+ 트리 ID 인덱스 | leaf/internal/root 분할, 재구축, 100만건 이상 삽입 후 ID조회·비인덱스 검색 실측 | [KJF-60](https://kylekim0868.atlassian.net/browse/KJF-60) | `feat/KJF-60-ym-bplus-index` |
 | DBMS-03 | HTTP API와 저장소 동시성 | 실제 병렬 HTTP INSERT에서 ID 중복 없이 파일·인덱스 일치, 재시작 후 보존 | [KJF-61](https://kylekim0868.atlassian.net/browse/KJF-61) | `feat/KJF-61-ym-http-concurrency` |
+| DBMS-04 | B+ 트리 체크포인트와 증분 복구 | 단건·범위·다음 ID 일치, 꼬리 복구와 손상 시 재구축, 동일 데이터의 재시작 실측 | [KJF-65](https://kylekim0868.atlassian.net/browse/KJF-65) | [feat/KJF-65-ym-index-checkpoint](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-65-ym-index-checkpoint) |
 
 ## 이슈·브랜치 연결
 
@@ -50,7 +51,7 @@ FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 
 
 - maxKeys 기본63인 직접 B+ 트리를 사용한다(최적 설정이라는 주장은 아님). 키 long/값 행 포인터, leaf만 실제 값을 저장하며 leaf간 next 연결을 유지한다. full leaf/internal/root 분할과 중복키 덮어쓰기를 지원한다. 행 삭제가 없어 트리 삭제/병합은 범위 밖이다.
 - `WHERE id = 정수`는 PRIMARY_KEY_INDEX로 포인터 위치를 읽고, ID 범위는 PRIMARY_KEY_RANGE로 리프를 순회한다. name/price/조건 없는 조회는 TABLE_SCAN이다. QueryResult에 accessPath(APPEND/PRIMARY_KEY_INDEX/TABLE_SCAN)를 추가해 실제 경로를 관찰한다.
-- 인덱스는 디스크에 별도 저장하지 않는다. 매 시작 시 검증한 JSONL에서 구축하며 INSERT의 파일 append·인덱스 반영·ID 증가를 같은 모니터로 보호한다. 파일은 추가됐으나 인덱스 반영이 실패하면 이후 명령을 거절하고 재시작 검증이 필요하다.
+- DBMS-02는 시작할 때 검증한 JSONL에서 인덱스를 구축한다. DBMS-04에서 체크포인트 복원 경로를 추가한다. INSERT의 파일 append·인덱스 반영·ID 증가를 같은 모니터로 보호한다. 파일은 추가됐으나 인덱스 반영이 실패하면 이후 명령을 거절하고 재시작 검증이 필요하다.
 - 실험은 새 디렉터리에100만행 삽입·정상 close 후 다시 열어 재구축한 뒤 동일20개 키·각조건 워밍업3회·단일스레드·동일행/컬럼/응답으로 ID검색과name검색을 교대 측정한다. 각 쿼리는 LIMIT1이며 선형탐색은 첫 일치까지 읽는다. JVM heap512MiB, 원시 ns 지연과p50/p95·동작시간합 기반처리량 기록. 다른 필드/접근방식 비교이며 동일 쿼리 계획 비교·운영 성능 보장이 아니다.
 
 [DBMS-02 검증·100만행 실제 측정 기록](dbms-02-verification.md). 교정 후 새 데이터 디렉터리에서 재측정하고 별도 JVM 조회까지 검증했다.
@@ -71,3 +72,12 @@ FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 
 - HTTP 서버의 선택적인 Redis 주소는 포트가 있는 loopback HTTP origin이다. SQL을 파싱한 뒤 인덱스를 쓰지 않는 SELECT만 대상으로 한다. 동일한 파싱 결과의 해시, 서버별 UUID, 저장소 버전으로 키를 만든다. DBMS가 소유권을 가진 동안 INSERT를 반영할 때 버전도 바뀌므로 새 읽기는 이전 캐시를 사용하지 않는다.
 - Redis HTTP 요청은 전체 응답에 250ms 기한을 적용한다. 성공한 스캔 결과는 Redis의 요청 크기 한도에 들어갈 때 TTL 30초로 저장한다. Redis 오류는 DBMS 조회로 넘어가며 DBMS의 저장소 오류와 결과 한도는 적용한다.
 - `X-Query-Cache`의 `HIT`는 캐시 응답, `MISS`는 캐시에서 찾지 못해 DBMS에서 읽은 응답, `BYPASS`는 캐시 대상 외 또는 Redis 오류다. 캐시가 비활성화된 실행에는 이 헤더가 없다.
+
+
+## DBMS-04 인덱스 복구 계약
+
+- `products.jsonl`이 원본이다. 정상 종료 시 JSONL을 동기화하고 데이터 디렉터리 소유권을 유지한 상태에서 `products.index`를 게시한다. 체크포인트가 현재 행을 모두 포함하면 파일을 다시 쓰지 않는다.
+- 체크포인트의 버전·크기·행 포인터·체크섬을 검증하고 JSONL 접두부 해시를 확인한다. 일치하면 B+ 트리 상태를 복원하고 체크포인트 이후 행을 파싱해 다음 ID를 결정한다.
+- 체크포인트를 사용할 수 없으면 전체 JSONL을 검증해 인덱스를 재구축한다. JSONL의 부분 행·손상·ID 불연속은 기존대로 시작을 거절한다.
+
+[DBMS-04 검증과 재시작 실측](dbms-04-verification.md).
