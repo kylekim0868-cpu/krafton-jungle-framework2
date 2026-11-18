@@ -7,6 +7,7 @@ public final class BPlusTree<V> {
     private abstract static class Node {
         final long[] keys;
         int count;
+        // 노드에 저장할 수 있는 최대 개수+1를 keys배열 개수로 지정한 이유: 64번째 Key를 임시로 삽입한 다음 Split을 수행하기 때문.
         Node(int capacity) { keys = new long[capacity + 1]; }
     }
     private static final class Leaf extends Node {
@@ -31,7 +32,7 @@ public final class BPlusTree<V> {
 
     public Optional<V> get(long key) {
         Node node = root;
-        while (node instanceof Branch branch) node = branch.children[upperBound(node, key)];
+        while (node instanceof Branch branch) node = branch.children[upperBound(node, key)]; // 트리의 높이가 몇이든 리프 노드까지 내려갈 수 있게 하는 코드
         var leaf = (Leaf) node;
         int index = lowerBound(leaf, key);
         return index < leaf.count && leaf.keys[index] == key ? Optional.of(value(leaf, index)) : Optional.empty();

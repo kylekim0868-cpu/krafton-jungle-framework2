@@ -21,6 +21,7 @@ public final class MiniRedisHttpServer implements AutoCloseable {
     public MiniRedisHttpServer(InetSocketAddress address, KeyValueStore store) {
         this.address = Objects.requireNonNull(address, "address");
         handler = new KeysHandler(Objects.requireNonNull(store, "store"));
+        // 작업 스레드가 최대 4개인 고정 크기 스레드 풀 생성
         executor = Executors.newFixedThreadPool(4, Thread.ofPlatform().name("mini-redis-http-", 0).factory());
     }
 
@@ -32,10 +33,10 @@ public final class MiniRedisHttpServer implements AutoCloseable {
             throw new IllegalStateException("server is already started");
         }
         // 시작 전에 닫힌 JDK HttpServer는 바인딩 자원을 반환하지 않을 수 있어 생성도 시작 시 수행한다.
-        server = HttpServer.create(address, 0);
-        server.createContext("/", handler);
-        server.setExecutor(executor);
-        server.start();
+        server = HttpServer.create(address, 0); // 지정된 주소에 HTTP 서버 생성
+        server.createContext("/", handler); // '/' 경로에 요청 처리 객체 등로ㅠㄱ
+        server.setExecutor(executor); // 요청 처리에 사용할 스레드 풀 지정
+        server.start(); // HTTP 요청 수신 시작
     }
 
     public synchronized int port() {

@@ -97,6 +97,7 @@ public final class AofLog implements MutationLog {
         long length = channel.size();
         long validEnd = 0;
         while (validEnd < length) {
+            // 파일에 남아 있는 데이터가 헤더에서 요구한 길이보다 짧은지 검사
             if (length - validEnd < HEADER_BYTES) break; // incomplete final header only
             var header = ByteBuffer.allocate(HEADER_BYTES);
             readFully(header);
@@ -148,6 +149,8 @@ public final class AofLog implements MutationLog {
                     || (!expiration.isNull() && (!expiration.isIntegralNumber() || !expiration.canConvertToLong()))) {
                 throw new IOException("invalid AOF field at " + position);
             }
+            // decode()의 핵심 코드
+            // replay()가 반환된 Mutation객체의 op를 확인하고 table.put(), get(), delete()를 진행한다.
             return new Mutation(root.get("op").stringValue(), root.get("key").stringValue(),
                     value.isNull() ? null : value.stringValue(), expiration.isNull() ? null : expiration.longValue());
         } catch (JacksonException | IllegalArgumentException failure) {
@@ -158,15 +161,22 @@ public final class AofLog implements MutationLog {
     @Override public synchronized void append(Mutation mutation) throws IOException {
         if (closed || failed) throw new IOException("AOF writes disabled; restart and validate log");
         if (mutation == null) throw new IllegalArgumentException("mutation must not be null");
+        // 1. Mutation 객체를 JSON 바이트 배열로 변환
         byte[] payload = JSON.writeValueAsBytes(mutation);
         if (payload.length > MAX_PAYLOAD_BYTES) throw new IllegalArgumentException("AOF record exceeds 8 MiB");
+        // 2. 헤더에 JSON 데이터가 들어갈 ByteBuffer를 생성
         var frame = ByteBuffer.allocate(HEADER_BYTES + payload.length);
+        // 3. 헤더에 Magic값, 데이터 길이, 체크섬을 기록
+        // 4. JSON 데이터를 이어 붙인다.
         frame.putInt(MAGIC).putInt(payload.length).putInt(crc(payload, payload.length));
-        frame.putInt(crc(frame.array(), 12)).put(payload).flip();
+        // 5. flip()을 호출해 버퍼을 읽을 준비 상태로 전환
+        frame.putInt(crc(frame.array(), 12)).put(payload).flip(); // flip(): 버퍼에 들어 있는 데이터를 지우는 것이 아니라 쓰기 모드에서 읽기 모드로 전환할 수 있도록 position과 limit 조정
         try {
+            // 하나의 frame에 들어 있는 데이터를 여러 번에 나누어 기록할 수 있게 한다 -> Partial Write
             while (frame.hasRemaining()) {
                 if (io.write(channel, frame) <= 0) throw new IOException("AOF write made no progress");
             }
+            // 파일 내용과 관련 메타데이터를 저장 장치에 반영하도록 요구. 일반적인 파일 쓰기보다 강한 내구성 보장을 제공.
             io.force(channel);
         } catch (IOException failure) {
             failed = true;

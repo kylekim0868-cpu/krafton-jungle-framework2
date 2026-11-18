@@ -32,8 +32,10 @@ public final class KeyValueStore implements AutoCloseable {
     /** 로그를 모두 검증·순서 재생한 뒤 만료를 정리하고 반환한다. HTTP 시작 전에 호출한다. */
     public static KeyValueStore openPersistent(int expectedEntries, Clock clock, Path path) throws IOException {
         var store = new KeyValueStore(expectedEntries, clock);
+        // AOF에 기록된 변경 연산과 만료 시각을 재생
         store.log = AofLog.open(path, store::replay);
         try {
+            // 현재 시각 기준 이미 만료된 항목을 제거한다
             store.table.removeExpired(clock.millis());
             return store;
         } catch (RuntimeException | Error failure) {

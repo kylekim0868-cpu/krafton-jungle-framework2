@@ -12,7 +12,7 @@ public final class Database implements AutoCloseable {
     private final BPlusTree<TableFile.Pointer> primary = new BPlusTree<>(63);
     private long nextId = 1;
     private boolean closed;
-    private boolean writesFailed;
+    private boolean writesFailed; // 저장 과정에서 오류가 발생한 이후, 데이터 정합성이 확인되지 않은 상태로 추가 작업이 실행되는 것을 막기 위한 보호 장치
 
     public Database(Path directory) throws IOException { this(directory, java.nio.channels.FileChannel::write); }
 
@@ -20,9 +20,11 @@ public final class Database implements AutoCloseable {
         ownership = DirectoryLock.acquire(directory);
         TableFile opened = null;
         try {
+            // 전달받은 데이터 디렉터리에서 "products.jsonl"파일의 경로를 생성한다. 해당 경로와 파일 쓰기 기능(Writer)을 TableFile 생성자에 전달해 파일 기반 테이블 저장소를 초기화한다.
             opened = new TableFile(directory.resolve("products.jsonl"), writer);
+            // 파일에 저장된 레코드를 순서대로 읽고 primary.put()은 각 레코드의 ID와 파일 위치를 B+Tree에 등록.
             opened.scan((product, pointer) -> {
-                if (product.id() != nextId) throw new IOException("nonsequential or duplicate row id");
+                if (product.id() != nextId) throw new IOException("nonsequential or duplicate row id"); // 파일에 저장된 ID가 1부터 중복이나 누락 없이 순서대로 기록되어 있는지 검증하는 코드
                 primary.put(product.id(), pointer);
                 try { nextId = Math.incrementExact(nextId); }
                 catch (ArithmeticException overflow) { throw new IOException("ID space exhausted", overflow); }
@@ -66,6 +68,8 @@ public final class Database implements AutoCloseable {
             nextId++;
             applied = true;
         } catch (IOException failure) {
+            // 저장 과정에서 오류가 발생한 이후, 데이터 정합성이 확인되지 않은 상태로 추가 작업이 실행되는 것을 막기 위한 보호 장치
+            // 정합성을 회복하려면 실제 파일과 인덱스의 상태를 검증하고 필요한 경우 롤백하거나 인덱스를 재구축하는 등의 복구 과정이 필요하다
             writesFailed = true;
             throw failure;
         } finally {
@@ -80,9 +84,9 @@ public final class Database implements AutoCloseable {
         long[] bytes = {0};
         if (select.filter() != null && select.filter().column().equals("id")) {
             long id = (Long) select.filter().value();
-            var pointer = primary.get(id);
+            var pointer = primary.get(id); // B+Tree(메모리)에서 Key 탐색
             if (pointer.isPresent()) {
-                var product = table.read(pointer.orElseThrow());
+                var product = table.read(pointer.orElseThrow()); // 실제 products.jsonl(디스크)에서 해당 위치 읽기
                 if (product.id() != id) throw new IOException("index/file ID mismatch");
                 collect(rows, product, pointer.orElseThrow(), select, limits, 0);
             }
@@ -92,6 +96,7 @@ public final class Database implements AutoCloseable {
             if (select.filter() == null || select.filter().matches(product)) {
                 bytes[0] = collect(rows, product, pointer, select, limits, bytes[0]);
             }
+            // 필요한 개수만 조회하고 스캔을 멈추는 코드
             return rows.size() < select.limit();
         });
         return new QueryResult("SELECT", 0, null, rows, "TABLE_SCAN");
@@ -113,6 +118,7 @@ public final class Database implements AutoCloseable {
             case "id" -> product.id(); case "name" -> product.name(); case "price" -> product.price();
             default -> throw new IllegalArgumentException("unknown column");
         });
+        // 원본 Map을 복사하는 것이 아니라 수정 불가능한 뷰(View)를 생성한다.
         return Collections.unmodifiableMap(row);
     }
 

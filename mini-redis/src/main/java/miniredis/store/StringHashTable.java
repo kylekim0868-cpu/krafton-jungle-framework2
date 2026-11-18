@@ -62,9 +62,11 @@ final class StringHashTable {
         int index = bucketIndex(key, buckets.length);
         for (Node node = buckets[index]; node != null; node = node.next) {
             if (node.key.equals(key)) {
+                // 해당 Key를 찾아서 Value 반환
                 return Optional.of(node.entry);
             }
         }
+        // 해당 Key를 찾지 못했을 경우 emptyp()호출
         return Optional.empty();
     }
 
