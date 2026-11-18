@@ -52,13 +52,7 @@ public final class SqlParser {
     private SqlStatement select() {
         List<String> projection = take("*") ? List.of("id", "name", "price") : columns();
         expect("from"); expect("products");
-        SqlStatement.Filter filter = null;
-        if (take("where")) {
-            String column = column(); expect("="); Object value = literal();
-            if ((column.equals("name") && !(value instanceof String))
-                    || (!column.equals("name") && !(value instanceof Long))) throw error("predicate type mismatch");
-            filter = new SqlStatement.Filter(column, value);
-        }
+        SqlStatement.Predicate filter = take("where") ? filter() : null;
         int limit = Integer.MAX_VALUE;
         if (take("limit")) {
             Object value = literal();
@@ -66,6 +60,25 @@ public final class SqlParser {
             limit = number.intValue();
         }
         return new SqlStatement.Select(projection, filter, limit);
+    }
+
+    private SqlStatement.Predicate filter() {
+        String column = column();
+        if (take("between")) {
+            if (!column.equals("id")) throw error("BETWEEN requires the id column");
+            Object lower = literal();
+            expect("and");
+            Object upper = literal();
+            if (!(lower instanceof Long low) || !(upper instanceof Long high)) {
+                throw error("BETWEEN requires integer bounds");
+            }
+            return new SqlStatement.IdRange(low, high);
+        }
+        expect("=");
+        Object value = literal();
+        if ((column.equals("name") && !(value instanceof String))
+                || (!column.equals("name") && !(value instanceof Long))) throw error("predicate type mismatch");
+        return new SqlStatement.Filter(column, value);
     }
 
     private List<String> columns() {

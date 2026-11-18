@@ -7,6 +7,7 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.ByteBuffer;
 import java.nio.charset.*;
 import java.util.Objects;
@@ -27,15 +28,22 @@ public final class QueryHttpServer implements AutoCloseable {
         StorageFailure(IOException cause) { super("SQL storage operation failed",cause); }
     }
     private final InetSocketAddress address;
-    private final SqlEngine engine;
+    private final Database database;
+    private final RedisQueryCache cache;
     private final JsonMapper json=JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
             DeserializationFeature.FAIL_ON_READING_DUP_TREE_KEY).build();
     private final ExecutorService workers=Executors.newFixedThreadPool(8,Thread.ofPlatform().name("mini-dbms-http-",0).factory());
     private HttpServer server;
     private boolean closed;
 
-    public QueryHttpServer(InetSocketAddress address,Database database) {
-        this.address=Objects.requireNonNull(address); engine=new SqlEngine(database);
+    public QueryHttpServer(InetSocketAddress address, Database database) {
+        this(address, database, null);
+    }
+
+    public QueryHttpServer(InetSocketAddress address, Database database, URI redisOrigin) {
+        this.address = Objects.requireNonNull(address);
+        this.database = Objects.requireNonNull(database);
+        cache = redisOrigin == null ? null : new RedisQueryCache(redisOrigin);
     }
     public synchronized void start() throws IOException {
         if(closed || server!=null) throw new IllegalStateException("server cannot start");
@@ -90,12 +98,54 @@ public final class QueryHttpServer implements AutoCloseable {
             }
             sql=root.get("sql").stringValue();
         } catch(JacksonException | CharacterCodingException invalid) { sendError(exchange,400,"INVALID_REQUEST"); return; }
-        QueryResult result;
-        try { result=engine.executeOne(sql,LIMITS); }
-        catch(IOException failure) { throw new StorageFailure(failure); }
-        byte[] response=json.writeValueAsBytes(result);
-        if(response.length>MAX_RESPONSE) throw new ResultLimitException();
-        sendJson(exchange,200,response);
+        var statement = SqlEngine.parseOne(sql);
+        var result = executeQuery(statement);
+        if (cache != null) exchange.getResponseHeaders().set("X-Query-Cache", result.cacheStatus());
+        sendJson(exchange, 200, result.body());
+    }
+
+    private record Response(byte[] body, String cacheStatus) { }
+
+    private Response executeQuery(SqlStatement statement) throws StorageFailure {
+        try {
+            if (cache != null && statement instanceof SqlStatement.Select select && !select.usesIdIndex()) {
+                return executeCached(select);
+            }
+            return new Response(queryBytes(statement), "BYPASS");
+        } catch (IOException failure) {
+            throw new StorageFailure(failure);
+        }
+    }
+
+    private Response executeCached(SqlStatement.Select select) throws IOException {
+        long revision = database.revision();
+        String key;
+        byte[] cached;
+        try {
+            key = cache.key(select, revision);
+            cached = cache.get(key);
+        } catch (IOException | JacksonException failure) {
+            return new Response(queryBytes(select), "BYPASS");
+        }
+        // Unchanged revision also checks availability, including a failed write.
+        if (cached != null && revision == database.revision()) {
+            return new Response(cached, "HIT");
+        }
+        byte[] response = queryBytes(select);
+        if (revision == database.revision()) {
+            try {
+                cache.put(key, response);
+            } catch (IOException | JacksonException failure) {
+                return new Response(response, "BYPASS");
+            }
+        }
+        return new Response(response, "MISS");
+    }
+
+    private byte[] queryBytes(SqlStatement statement) throws IOException {
+        byte[] response = json.writeValueAsBytes(database.execute(statement, LIMITS));
+        if (response.length > MAX_RESPONSE) throw new ResultLimitException();
+        return response;
     }
     private void sendError(HttpExchange exchange,int status,String error) throws IOException {
         exchange.getResponseHeaders().set("Connection","close");
@@ -117,5 +167,6 @@ public final class QueryHttpServer implements AutoCloseable {
                 if(!workers.awaitTermination(10,TimeUnit.SECONDS)) throw new IllegalStateException("HTTP workers did not terminate");
             }
         } catch(InterruptedException failure) { workers.shutdownNow(); Thread.currentThread().interrupt(); }
+        finally { if (cache != null) cache.close(); }
     }
 }

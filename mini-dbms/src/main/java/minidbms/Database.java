@@ -40,19 +40,33 @@ public final class Database implements AutoCloseable {
 
     public QueryResult execute(SqlStatement statement) throws IOException { return execute(statement, QueryLimits.UNLIMITED); }
 
-    public synchronized QueryResult execute(SqlStatement statement, QueryLimits limits) throws IOException {
+    public QueryResult execute(SqlStatement statement, QueryLimits limits) throws IOException {
+        return execute(statement, limits, true);
+    }
+
+    synchronized QueryResult execute(SqlStatement statement, QueryLimits limits, boolean useIndex) throws IOException {
         Objects.requireNonNull(limits, "limits");
-        if (closed) throw new IllegalStateException("database closed");
-        if (writesFailed || table.writesFailed()) throw new IOException("database unavailable until reopened and validated");
+        requireAvailable();
         try {
             if (statement instanceof SqlStatement.Insert insert) return insert(insert);
-            if (statement instanceof SqlStatement.Select select) return select(select, limits);
+            if (statement instanceof SqlStatement.Select select) return select(select, limits, useIndex);
             throw new IllegalArgumentException("unknown statement");
         } catch (IOException failure) {
             // A failed SELECT must not allow apparently healthy index misses or later writes.
             writesFailed = true;
             throw failure;
         }
+    }
+
+    /** Captured under the same lock as INSERT, including the file and index update. */
+    public synchronized long revision() throws IOException {
+        requireAvailable();
+        return nextId - 1;
+    }
+
+    private void requireAvailable() throws IOException {
+        if (closed) throw new IllegalStateException("database closed");
+        if (writesFailed || table.writesFailed()) throw new IOException("database unavailable until reopened and validated");
     }
 
     private QueryResult insert(SqlStatement.Insert insert) throws IOException {
@@ -79,18 +93,24 @@ public final class Database implements AutoCloseable {
         return new QueryResult("INSERT", 1, product.id(), List.of(), "APPEND");
     }
 
-    private QueryResult select(SqlStatement.Select select, QueryLimits limits) throws IOException {
+    private QueryResult select(SqlStatement.Select select, QueryLimits limits, boolean useIndex) throws IOException {
         var rows = new ArrayList<Map<String, Object>>();
         long[] bytes = {0};
-        if (select.filter() != null && select.filter().column().equals("id")) {
-            long id = (Long) select.filter().value();
-            var pointer = primary.get(id); // B+Tree(메모리)에서 Key 탐색
+        if (useIndex && select.filter() instanceof SqlStatement.Filter filter && filter.column().equals("id")) {
+            long id = (Long) filter.value();
+            var pointer = primary.get(id);
             if (pointer.isPresent()) {
-                var product = table.read(pointer.orElseThrow()); // 실제 products.jsonl(디스크)에서 해당 위치 읽기
-                if (product.id() != id) throw new IOException("index/file ID mismatch");
-                collect(rows, product, pointer.orElseThrow(), select, limits, 0);
+                var location = pointer.orElseThrow();
+                collect(rows, readIndexed(id, location), location, select, limits, 0);
             }
             return new QueryResult("SELECT", 0, null, rows, "PRIMARY_KEY_INDEX");
+        }
+        if (useIndex && select.filter() instanceof SqlStatement.IdRange range) {
+            primary.rangeScan(range.low(), range.high(), (id, pointer) -> {
+                bytes[0] = collect(rows, readIndexed(id, pointer), pointer, select, limits, bytes[0]);
+                return rows.size() < select.limit();
+            });
+            return new QueryResult("SELECT", 0, null, rows, "PRIMARY_KEY_RANGE");
         }
         table.scan((product, pointer) -> {
             if (select.filter() == null || select.filter().matches(product)) {
@@ -100,6 +120,12 @@ public final class Database implements AutoCloseable {
             return rows.size() < select.limit();
         });
         return new QueryResult("SELECT", 0, null, rows, "TABLE_SCAN");
+    }
+
+    private Product readIndexed(long id, TableFile.Pointer pointer) throws IOException {
+        var product = table.read(pointer);
+        if (product.id() != id) throw new IOException("index/file ID mismatch");
+        return product;
     }
 
     private static long collect(List<Map<String, Object>> rows, Product product, TableFile.Pointer pointer,

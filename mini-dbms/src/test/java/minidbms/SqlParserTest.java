@@ -17,7 +17,7 @@ class SqlParserTest {
     @Test void allowsEmptyNameZeroPriceAndFinalStatementWithoutSemicolon() {
         assertEquals(new SqlStatement.Insert("", 0), SqlParser.parseScript("INSERT INTO products(name,price) VALUES('',0)").getFirst());
         var select = (SqlStatement.Select) SqlParser.parseScript("SELECT * FROM products WHERE id=9223372036854775807").getFirst();
-        assertEquals(Long.MAX_VALUE, select.filter().value());
+        assertEquals(Long.MAX_VALUE, ((SqlStatement.Filter) select.filter()).value());
     }
     @ParameterizedTest @ValueSource(strings = {"", "-- only comment", "CREATE TABLE products(id INT);", "DROP TABLE products;",
             "SELECT * FROM ../secret;", "SELECT other FROM products;", "SELECT id,id FROM products;", "SELECT * FROM other;",

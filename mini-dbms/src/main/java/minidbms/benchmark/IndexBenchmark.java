@@ -6,12 +6,12 @@ import tools.jackson.databind.json.JsonMapper;
 import java.nio.file.*;
 import java.util.*;
 
-/** 같은 레코드의 ID 인덱스 조회와 name LIMIT1 선형 탐색을 비교한다. 운영 최대 성능 측정이 아니다. */
+/** 동일한 ID SQL을 인덱스 사용과 선형 탐색으로 교대 실행한다. 운영 최대 성능 측정이 아니다. */
 public final class IndexBenchmark {
     public record Summary(int samples,double p50Ms,double p95Ms,double operationsPerSecond,long activeNanos) { }
     public record Result(String java,String os,String architecture,int rows,int warmup,int samples,long seed,
                          long insertAndCloseNanos,long reopenAndRebuildNanos,long fileBytes,BPlusTree.Structure structure,
-                         long[] keys,long[] idNanos,long[] nameNanos,Summary idIndex,Summary nameScan) { }
+                         long[] keys,long[] idNanos,long[] scanNanos,Summary idIndex,Summary idScan) { }
     private IndexBenchmark() { }
 
     public static Result run(Path directory,int rows,int samples,int warmup) throws Exception {
@@ -37,19 +37,20 @@ public final class IndexBenchmark {
             for(int i=0;i<samples;i++) keys[i]=random.nextLong(rows)+1;
             keys[0]=1; if(samples>1) keys[samples-1]=rows;
             var engine=new SqlEngine(db);
-            for(int i=0;i<warmup;i++) { query(engine,keys[i%samples],true); query(engine,keys[i%samples],false); }
-            long[] id=new long[samples], name=new long[samples];
+            var scanEngine=new SqlEngine(db,false);
+            for(int i=0;i<warmup;i++) { query(engine,keys[i%samples],true); query(scanEngine,keys[i%samples],false); }
+            long[] id=new long[samples], scan=new long[samples];
             for(int i=0;i<samples;i++) {
-                if(i%2==0) { id[i]=query(engine,keys[i],true); name[i]=query(engine,keys[i],false); }
-                else { name[i]=query(engine,keys[i],false); id[i]=query(engine,keys[i],true); }
+                if(i%2==0) { id[i]=query(engine,keys[i],true); scan[i]=query(scanEngine,keys[i],false); }
+                else { scan[i]=query(scanEngine,keys[i],false); id[i]=query(engine,keys[i],true); }
             }
             return new Result(System.getProperty("java.runtime.version"),System.getProperty("os.name")+" "+System.getProperty("os.version"),
-                    System.getProperty("os.arch"),rows,warmup,samples,621_017,inserted,rebuilt,Files.size(table),structure,keys,id,name,summary(id),summary(name));
+                    System.getProperty("os.arch"),rows,warmup,samples,621_017,inserted,rebuilt,Files.size(table),structure,keys,id,scan,summary(id),summary(scan));
         }
     }
 
     private static long query(SqlEngine engine,long key,boolean indexed) throws Exception {
-        String sql="SELECT * FROM products WHERE "+(indexed?"id="+key:"name='product-"+key+"'")+" LIMIT 1;";
+        String sql="SELECT * FROM products WHERE id="+key+" LIMIT 1;";
         long start=System.nanoTime();
         var result=engine.execute(sql).getFirst();
         long elapsed=System.nanoTime()-start;

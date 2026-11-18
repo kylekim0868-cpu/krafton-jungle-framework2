@@ -54,6 +54,24 @@ curl -i http://127.0.0.1:8090/query -H 'Content-Type: application/json' -d '{"sq
 
 HTTP는 요청당 단일SQL, 본문1MiB, 결과1000행/보수적 행바이트4MiB 예산이다. 큰 결과는413이며 LIMIT/WHERE로 줄인다. `SELECT` 미스는200/rows[]이다. 유효하지 않은JSON/SQL400, 미디어415, 저장소오류503. 자세한 오류와 메모리/내구성 한계는 요구사항을 따른다.
 
+## ID 범위 조회와 선택형 Redis 캐시
+
+```sql
+SELECT id, name FROM products WHERE id BETWEEN 10 AND 20 LIMIT 5;
+```
+
+두 경계를 포함해 ID 오름차순으로 조회한다. B+ 트리의 시작 리프부터 다음 리프로 순회하며 `accessPath`는 `PRIMARY_KEY_RANGE`다.
+
+캐시를 사용하려면 [Mini Redis의 메모리 모드](../mini-redis/README.md#http-서버-실행)를 먼저 실행하고, DBMS 실행 명령에 Redis 주소를 추가한다.
+
+```sh
+"$JAVA_HOME/bin/java" -cp 'target/classes:target/dependency/*' minidbms.http.HttpMain 8090 data http://127.0.0.1:8080
+```
+
+- 캐시는 HTTP의 테이블 스캔 SELECT에만 적용한다. 예를 들어 동일한 `SELECT id FROM products WHERE name = '사과'`를 두 번 보내면 첫 응답에 `X-Query-Cache: MISS`, 다음에 `HIT`가 나온다.
+- `INSERT` 이후에는 새 데이터 버전의 키를 쓰고, DBMS가 재시작하면 키 공간을 새로 만든다. 캐시 항목은 30초 뒤 만료된다.
+- 캐시가 시간 초과되거나 잘못 응답하면 DBMS로 조회하고 `BYPASS`를 표시한다. 두 인자로 시작하면 캐시를 사용하지 않는다. SQL·응답 본문 계약은 두 모드에서 같다.
+
 ## 100만행 성능 비교 재현
 
 ```sh
@@ -61,4 +79,4 @@ BENCH_DIR=$(mktemp -d /private/tmp/dbms-million.XXXXXX)
 "$JAVA_HOME/bin/java" -Xmx512m -cp 'target/classes:target/dependency/*' minidbms.benchmark.IndexBenchmark "$BENCH_DIR" 1000000 20 3
 ```
 
-기존 데이터에는 덧붙이지 않으며 실험용 파일은 BENCH_DIR에 보존한다. 결과JSON에 행수/구조/환경/워밍업/원시지연/p50/p95/동작지연합 처리량을 기록한다. ID와name LIMIT1의 다른 접근방식 비교로 운영최대치/보편배수로 해석하지 않는다.
+기존 데이터에는 덧붙이지 않으며 실험용 파일은 BENCH_DIR에 보존한다. 결과JSON에 행수/구조/환경/워밍업/원시지연/p50/p95/동작지연합 처리량을 기록한다. 동일한 `WHERE id = ? LIMIT 1`을 인덱스 사용 모드와 선형 탐색 모드로 교대 실행한다. [KJF-64 실측과 재현 조건](../docs/mini-dbms/kjf-64-verification.md)을 참고한다.

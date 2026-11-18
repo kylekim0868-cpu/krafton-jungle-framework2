@@ -2,7 +2,7 @@ package minidbms.index;
 
 import java.util.*;
 
-/** 직접 만든 삽입/동등조회 전용 B+ 트리. 값은 leaf에만 있고 내부 키는 오른쪽 자식의 최소 키다. */
+/** 직접 만든 삽입·동등·범위 조회 B+ 트리. 값은 leaf에만 있고 내부 키는 오른쪽 자식의 최소 키다. */
 public final class BPlusTree<V> {
     private abstract static class Node {
         final long[] keys;
@@ -31,11 +31,35 @@ public final class BPlusTree<V> {
     }
 
     public Optional<V> get(long key) {
-        Node node = root;
-        while (node instanceof Branch branch) node = branch.children[upperBound(node, key)]; // 트리의 높이가 몇이든 리프 노드까지 내려갈 수 있게 하는 코드
-        var leaf = (Leaf) node;
+        var leaf = findLeaf(key);
         int index = lowerBound(leaf, key);
         return index < leaf.count && leaf.keys[index] == key ? Optional.of(value(leaf, index)) : Optional.empty();
+    }
+
+    @FunctionalInterface
+    public interface RangeVisitor<V, E extends Exception> {
+        boolean visit(long key, V value) throws E;
+    }
+
+    /** YJ의 범위 순회 방식으로 시작 리프를 한 번 찾고 리프의 next 연결을 따른다. */
+    public <E extends Exception> void rangeScan(long low, long high, RangeVisitor<V, E> visitor) throws E {
+        if (low > high) return;
+        Leaf leaf = findLeaf(low);
+        int index = lowerBound(leaf, low);
+        while (leaf != null) {
+            for (; index < leaf.count; index++) {
+                long key = leaf.keys[index];
+                if (key > high || !visitor.visit(key, value(leaf, index))) return;
+            }
+            leaf = leaf.next;
+            index = 0;
+        }
+    }
+
+    private Leaf findLeaf(long key) {
+        Node node = root;
+        while (node instanceof Branch branch) node = branch.children[upperBound(node, key)];
+        return (Leaf) node;
     }
 
     @SuppressWarnings("unchecked") private V value(Leaf leaf, int index) { return (V) leaf.values[index]; }
