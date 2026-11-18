@@ -1,0 +1,99 @@
+# Mini Redis 요구사항
+
+팀원 각자가 Mini Redis와 Mini DBMS를 구현한다. 이후 같은 평가 기준으로 코드, 인터페이스, 로직, 성능을 비교하고 채택한 부분을 팀 최종본에 통합한다. 아래 HTTP 계약과 내부 구조는 사이드 채팅에서 정리한 개인 설계안이다. 팀 공통 평가 계약은 팀 합의에 따른다.
+
+## 현재 범위와 구현 순서
+
+REDIS-00~REDIS-AOF 구현을 이 프로젝트의 `mini-redis/`에서 독립적으로 관리한다. [아키텍처](architecture.md)와 단계별 검증 기록을 따른다. Mini DBMS는 [별도 요구사항](../mini-dbms/requirements.md)과 독립 Maven 프로젝트로 관리하며, 상품 API의 원본은 현재 테스트용 구현이다. 실제 Redis–DBMS 연동은 아직 하지 않는다.
+
+| ID | 단계 | 구현 범위 | 완료 기준 |
+|---|---|---|---|
+| REDIS-00 | 0. 프로젝트 설정 | Java 25·Maven Wrapper·OMX 환경, 아키텍처 문서, 소스·테스트 폴더, Jira Task 연결 | Java 25에서 Maven 설정을 로드하고 문서와 폴더 구조, Jira 작업 범위를 확인한다. |
+| REDIS-01 | 1. 해시 테이블 | 직접 구현한 저장·조회·삭제 | JUnit으로 저장, 조회, 덮어쓰기, 삭제, 충돌, 리사이즈를 검증한다. |
+| REDIS-02 | 2. HTTP API | 동일한 저장소를 사용하는 `PUT`·`GET`·`DELETE` | 별도 HTTP 클라이언트로 저장 → 조회 → 삭제 → 미스를 검증한다. 정상 응답과 잘못된 JSON을 확인한다. |
+| REDIS-03 | 3. TTL과 동시성 | 만료 판정, 저장소 잠금, `ttlMs` 검증 | 만료 직전과 정각을 검증하고, 만료 처리와 덮어쓰기가 겹쳐도 새 값이 유지되는지 확인한다. |
+| REDIS-04 | 4. 상품 API 연동 | 캐시 적중·미스, 키 무효화, 캐시 장애 시 원본 조회 | 같은 요청의 원본 호출 횟수로 캐시 적중을 확인하고, 만료·삭제·캐시 서버 중단 시 원본 조회를 검증한다. |
+| REDIS-05 | 5. 성능 비교 | 캐시 미사용·미스·적중 실험 | 같은 조건에서 응답 시간, 처리량, 원본 호출 수를 측정하고 재현 방법을 기록한다. |
+| REDIS-AOF | 선택. AOF | 추가 전용 로그와 재시작 복구 | 강제 종료 후 저장·삭제·만료가 복구되는지 확인하고, 잘린 로그와 기록 실패를 검증한다. |
+
+각 단계의 완료 기준을 확인한 뒤 다음 단계로 진행한다. AOF를 채택하면 TTL과 동시성 정책이 확립된 뒤 구현한다.
+
+## Mini Redis 필수 동작
+
+### 키-값 저장소
+
+직접 구현한 해시 테이블로 저장·조회·삭제를 제공한다. 해시로 버킷을 정하고 실제 키를 비교해 충돌을 처리한다. 개인 설계안은 버킷 배열과 체이닝을 사용하고, 적재율이 `0.75`를 넘으면 버킷 수를 두 배로 늘린 뒤 기존 항목을 재배치한다. 구현 후 해시 계산, 충돌, 리사이즈와 각 함수의 처리 흐름을 설명한다.
+
+REDIS-01에서는 호출자가 예상 최대 고유 키 수 `N`을 지정하고 `max(1, ceil(N / 0.75))`개 버킷을 사전 할당하는 개인 설계 선택을 적용한다. 10만 건 같은 데이터 크기를 기본값으로 고정하거나 2의 거듭제곱으로 올림하지 않는다. 예상 수를 넘어서도 저장할 수 있으며, 실제 적재율이 0.75를 초과하는 신규 삽입 시 확장한다. 같은 키 덮어쓰기는 크기·용량을 늘리지 않는다. 빈 문자열 키·값은 허용하고 `null`은 거절한다. 조회는 존재하는 빈 값과 미스를 `Optional<String>`으로 구별한다. 구현과 검증은 [REDIS-01 검증 기록](redis-01-verification.md)을 참고한다.
+
+### TTL과 동시성
+
+만료 시각에 도달한 키는 조회 시 제거하고 미스 처리한다. 개인 설계안은 단일 서버 프로세스에서 저장소 공통 잠금으로 저장·조회·삭제를 보호한다. 조회·만료 확인·삭제를 한 잠금 범위에 두어 같은 키를 덮어쓴 새 값이 이전 값의 만료 처리로 지워지는 일을 막는다.
+
+### 외부 HTTP API
+
+개인 설계안의 요청과 응답은 아래와 같다.
+
+| 요청 | 입력과 응답 |
+|---|---|
+| `PUT /keys/product:42` | `{"value":"상품 응답","ttlMs":30000}`으로 저장하거나 덮어쓴다. 성공 시 `204`. |
+| `GET /keys/product:42` | 유효한 값은 `200`과 `{"value":"상품 응답"}`을 반환한다. 없거나 만료된 키는 `404`. |
+| `DELETE /keys/product:42` | 키를 무효화한다. 이미 없는 키에도 `204`를 반환한다. |
+
+빈 문자열을 값으로 허용한다. `ttlMs`를 주면 양의 정수여야 한다. TTL을 생략해 덮어쓰면 기존 만료 설정을 제거한다. 값 누락, 잘못된 JSON, 유효하지 않은 TTL에는 `400`을 반환한다.
+
+**REDIS-03 이후 계약:** PUT은 문자열 `value`와 선택적인 양의 정수 `ttlMs`만 허용한다. TTL 타입·범위·절대 만료 시각 오버플로는 `400 INVALID_TTL`, 미지원 필드·잘못된 JSON·값 누락은 `400 INVALID_REQUEST`이며 기존 값을 보존한다. 중복 필드와 뒤에 추가된 JSON도 거절한다. PUT은 `application/json`, 최대 1 MiB다. HTTP 키는 비어 있지 않은 UTF-8 경로 세그먼트 하나이며 슬래시·제어 문자·쿼리는 거절한다. 고정 4개 HTTP 스레드가 공통 저장소 잠금을 사용한다. [REDIS-02 기록](redis-02-verification.md)은 TTL 미지원 당시의 이력이며 현재 동작은 [REDIS-03 기록](redis-03-verification.md)을 따른다.
+
+### 상품 API 연동과 무효화
+
+상품 API는 캐시 적중 시 저장된 응답을 반환하고, 미스 시 원본을 조회한 뒤 응답을 TTL과 함께 캐시에 저장한다. 캐시 서버가 중단되면 원본을 조회한다. 원본 변경 기능을 추가하면 변경 성공 후 관련 키를 `DELETE`한다. 이미 진행 중인 조회가 삭제 후 이전 응답을 다시 저장할 수 있으며, 기본안은 TTL로 그 값이 남는 시간을 제한한다.
+
+## 장애 복구 설계
+
+장애 후 데이터 보존 방식을 설명한다. AOF 구현은 사이드 채팅 설계안의 선택 기능이다.
+
+- AOF를 구현하면 저장·삭제를 로그에 모두 기록하고 `FileChannel.force(true)`로 동기화한 뒤 메모리에 반영하고 성공 응답을 반환한다. 저장 기록에는 키, 값, 절대 만료 시각을 포함한다.
+- 재시작 시 로그를 검증하고 순서대로 재생한 뒤 최종 상태에서 만료된 항목을 제거한다. 끝에 잘린 레코드는 마지막 정상 위치까지만 복구하고, 완전한 레코드의 체크섬이 불일치하면 시작을 중단한다.
+- 기록 또는 동기화에 실패하면 `503`을 반환하고 로그 상태가 확인될 때까지 추가 쓰기를 중단한다. 복구는 로컬 로그가 보존된 상태를 전제로 하며, 매 쓰기의 동기화 비용도 검증한다.
+
+## 검증과 비교 기준
+
+| 항목 | 통과 기준 또는 측정 조건 |
+|---|---|
+| 저장소 단위 테스트 | 저장 후 조회, 같은 키 덮어쓰기, 삭제 후 미스, 빈 값과 미스 구분을 확인한다. 충돌한 키 중 하나를 삭제해도 다른 키가 남고, 리사이즈 후 값이 유지돼야 한다. |
+| TTL·동시성 | 제어 가능한 시계로 만료 직전·정각·직후를 검증한다. 만료 처리와 같은 키 덮어쓰기가 겹칠 때 새 값이 지워지지 않아야 한다. |
+| 외부 HTTP 테스트 | 별도 클라이언트의 `PUT → GET → DELETE → GET`에 `204 → 200 → 204 → 404`를 반환한다. 잘못된 JSON과 TTL도 검증한다. |
+| 상품 API 테스트 | 첫 요청에서 원본을 호출하고, 두 번째 요청에서 같은 응답을 원본 호출 없이 반환한다. TTL 만료, 키 삭제, 캐시 서버 중단 후 원본 조회를 확인한다. |
+| 장애 복구 테스트 | AOF를 구현한 경우 저장·삭제 성공 응답 후 서버를 강제 종료한다. 재시작하면 저장한 값은 남고, 삭제됐거나 중단 중 만료된 값은 조회되지 않아야 한다. 로그 끝 잘림, 체크섬 불일치, 기록 실패도 검증한다. |
+| 캐시 성능 비교 | 같은 상품 API에서 캐시 미사용·미스·적중을 비교한다. 데이터, 요청 키, 동시 요청 수, 응답 크기와 JVM 워밍업 조건을 맞춘다. `p50`·`p95` 응답 시간, 초당 처리량, 원본 호출 수를 기록한다. |
+
+팀 비교 시 가능한 한 같은 JDK, 데이터, 부하와 검증 시나리오를 사용한다. 병합 후에는 채택한 모듈의 인터페이스와 데이터 형식을 확인하고 동일한 테스트와 벤치마크를 다시 실행한다.
+
+## 이슈·브랜치 연결
+
+Mini Redis는 설정을 포함한 필수 6개와 선택 AOF 1개, 총 7개 요구사항을 관리한다. DBMS 3개는 [별도 연결표](../mini-dbms/requirements.md#현재-범위와-구현-순서)에서 관리한다. **팀원별로 요구사항 하나당 Jira 이슈 하나·작업 브랜치 하나**를 사용한다. 승인된 작업 브랜치를 생성하면 구현 변경·새 커밋 전에 즉시 원격 publish와 upstream 연결을 수행하고, 원격 커밋 일치 여부와 브랜치 URL을 확인·기록한다. 상세 조건과 테스트는 해당 이슈의 완료 체크리스트에 포함한다. 생성·명명·publish·검증·PR 절차는 [팀 개발 규칙](../../TEAM_DEVELOPMENT_RULES.md)을 따른다.
+
+아래는 YM 작업 연결표다. `미연결`은 이 문서에 실제 키가 아직 연결되지 않았다는 뜻이며 Jira에 이슈가 없다는 뜻은 아니다. 생성 요청 시 기존 이슈부터 확인한다. `미생성`은 이 문서에 확인·기록된 브랜치가 없다는 뜻이다. 다른 팀원은 담당자별 연결표를 따로 유지한다.
+
+| 요구사항 ID | Jira 이슈 | 작업 브랜치 |
+|---|---|---|
+| REDIS-00 | [KJF-51](https://kylekim0868.atlassian.net/browse/KJF-51) | `ym-mini-redis` (기존 설정 브랜치) |
+| REDIS-01 | [KJF-52](https://kylekim0868.atlassian.net/browse/KJF-52) | `feat/KJF-52-ym-hash-table` |
+| REDIS-02 | [KJF-53](https://kylekim0868.atlassian.net/browse/KJF-53) | [`feat/KJF-53-ym-http-api`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-53-ym-http-api) |
+| REDIS-03 | [KJF-54](https://kylekim0868.atlassian.net/browse/KJF-54) | [`feat/KJF-54-ym-ttl-concurrency`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-54-ym-ttl-concurrency) |
+| REDIS-04 | [KJF-55](https://kylekim0868.atlassian.net/browse/KJF-55) | [`feat/KJF-55-ym-product-cache`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-55-ym-product-cache) |
+| REDIS-05 | [KJF-56](https://kylekim0868.atlassian.net/browse/KJF-56) | [`feat/KJF-56-ym-cache-benchmark`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-56-ym-cache-benchmark) |
+| REDIS-AOF | [KJF-57](https://kylekim0868.atlassian.net/browse/KJF-57) (채택) | [`feat/KJF-57-ym-aof-recovery`](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-57-ym-aof-recovery) |
+
+`ym-mini-redis`는 기존 설정 이력과 Redis 개인 통합을 위한 브랜치로 보존한다. 새 요구사항 작업 브랜치는 `<유형>/<실제 Jira 이슈키>-ym-<작업명>`으로 생성하고 표를 갱신한다. 이슈·브랜치 생성과 전환은 실행 요청 범위 안에서만 수행한다.
+
+REDIS-02의 최초 publish는 `c4dabbbdbd53c8515d47e074a3608a04b2da8961`에서 수행했다. 원격 SHA 일치와 `origin/feat/KJF-53-ym-http-api` upstream을 확인했으며, 이후 HTTP 구현 변경은 별도 요청 전 커밋·Push하지 않는다.
+
+
+REDIS-03 최초 publish: `a5e7adff242a49105ce4bc759cbf56dc726f99e0`, upstream=`origin/feat/KJF-54-ym-ttl-concurrency`, 원격 SHA 일치 확인. 이번 일괄 실행 요청은 단계별 검증 후 커밋·Push·PR까지 허용하며 자동 병합하지 않는다.
+
+REDIS-04 최초 publish: `6293dd96bd7fd223bb02c23abed048f5bc6df6c9`, upstream=`origin/feat/KJF-55-ym-product-cache`, 원격 SHA 일치. [검증 기록](redis-04-verification.md).
+
+REDIS-05 최초 publish: `0b0fbc48481cbb4014f34b5e36509cb2e1975732`, upstream=`origin/feat/KJF-56-ym-cache-benchmark`, 원격 SHA 일치. [동일 조건 실제 측정 기록](redis-05-verification.md).
+
+REDIS-AOF 최초 publish: `9a1261c150c97fc617d78e002b1a708966ce198c`, upstream=`origin/feat/KJF-57-ym-aof-recovery`, 원격 SHA 일치. [AOF 형식·복구·검증·비용 기록](redis-aof-verification.md).
