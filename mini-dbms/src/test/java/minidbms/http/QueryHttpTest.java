@@ -55,6 +55,18 @@ class QueryHttpTest {
         assertEquals(0,success("SELECT * FROM products WHERE id=999;").get("rows").size());
         assertEquals("application/json; charset=utf-8",sql("SELECT * FROM products;").headers().firstValue("Content-Type").orElseThrow());
     }
+    @Test void rangesCrossLeafBoundariesAndRespectSqlAndHttpLimits() throws Exception {
+        for (int i = 1; i <= 1100; i++) database.execute(new SqlStatement.Insert("product-" + i, i));
+        var result = success("SELECT id FROM products WHERE id BETWEEN 27 AND 101 LIMIT 70;");
+        assertEquals("PRIMARY_KEY_RANGE", result.get("accessPath").stringValue());
+        var rows = result.get("rows");
+        assertEquals(70, rows.size());
+        for (int i = 0; i < rows.size(); i++) assertEquals(27 + i, rows.get(i).get("id").longValue());
+        assertEquals(0, success("SELECT id FROM products WHERE id BETWEEN 10 AND -1;").get("rows").size());
+        assertEquals(413, sql("SELECT id FROM products WHERE id BETWEEN 1 AND 1100;").statusCode());
+        assertEquals(400, sql("SELECT id FROM products WHERE price BETWEEN 1 AND 7;").statusCode());
+    }
+
     @ParameterizedTest @ValueSource(strings={"", "{", "null", "[]", "{}", "{\"sql\":null}", "{\"sql\":1}",
             "{\"sql\":\"SELECT * FROM products;\",\"other\":1}", "{\"sql\":\"a\",\"sql\":\"b\"}", "{\"sql\":\"SELECT * FROM products;\"} {}"})
     void invalidJsonDoesNotChangeTheStore(String body) throws Exception {

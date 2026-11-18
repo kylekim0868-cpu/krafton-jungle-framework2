@@ -4,7 +4,7 @@
 
 ## 현재 범위와 구현 순서
 
-REDIS-00~REDIS-AOF 구현을 이 프로젝트의 `mini-redis/`에서 독립적으로 관리한다. [아키텍처](architecture.md)와 단계별 검증 기록을 따른다. Mini DBMS는 [별도 요구사항](../mini-dbms/requirements.md)과 독립 Maven 프로젝트로 관리하며, 상품 API의 원본은 현재 테스트용 구현이다. 실제 Redis–DBMS 연동은 아직 하지 않는다.
+REDIS-00~REDIS-AOF 구현을 이 프로젝트의 `mini-redis/`에서 독립적으로 관리한다. [아키텍처](architecture.md)와 단계별 검증 기록을 따른다. Mini DBMS는 [별도 요구사항](../mini-dbms/requirements.md)과 독립 Maven 프로젝트로 관리하며, 상품 API의 원본은 현재 테스트용 구현이다. DBMS의 선택형 쿼리 캐시는 [DBMS 계약](../mini-dbms/requirements.md#kjf-64--id-범위-조회와-선택형-쿼리-캐시)에 기술한다.
 
 | ID | 단계 | 구현 범위 | 완료 기준 |
 |---|---|---|---|

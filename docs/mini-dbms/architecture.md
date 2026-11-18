@@ -42,3 +42,9 @@ HttpMain은 Database 생명주기를 소유하고, QueryHttpServer는 HTTP/작�
 QueryHttpServer는 엄격 UTF8/JSON→단일SQL변환→SqlEngine.executeOne→QueryResult JSON을 담당한다. QueryLimits를 Database에 전달해 조회 중 행수/보수적바이트예산을 확인한다. 예산 초과는 읽기 전용 오류이며 파일/인덱스를 변경하지 않는다. CLI는 같은 엔진에 무제한 예산을 사용한다. 저장소 실패는 원인 로그+503, 예상 외 오류는 원인 로그+500으로 보내며 이미 응답 중이면 예외를 전파한다.
 
 공통 모니터는 단순한 단일프로세스 일관성 선택이다. 같은 프로세스에서 외부 HTTP 요청은 병렬 도착하지만 DB작업은 명령 단위로 직렬화된다. 장시간 스캔 동안 쓰기도 대기한다. 고정8개 스레드의 대기열은 무제한이며 Slow-client/CPU쿼리 제한은 없다. 대량 결과는 HTTP예산으로 메모리 사용을 제한하지만 운영준비 상태를 뜻하지 않는다.
+
+## 선택형 HTTP 쿼리 캐시
+
+`QueryHttpServer`가 파싱한 문장에서 테이블 스캔 SELECT를 골라 `RedisQueryCache`로 전달한다. 캐시가 비어 있으면 `Database`가 기존 결과 한도로 실행한 뒤 별도 Redis에 TTL을 걸어 저장한다. 캐시 실험은 Redis 메모리 모드를 기준으로 한다. ID 단건과 범위 조회는 바로 DBMS를 실행한다. Redis는 별도 HTTP 서버며 Maven 의존성을 공유하지 않는다.
+
+`Database`는 같은 락 안에서 INSERT의 파일 쓰기·인덱스 반영·ID 증가를 수행한다. 캐시 키에 이 상태의 버전을 포함하고, 히트 뒤 버전과 DB 가용성을 다시 확인한다. 같은 결과를 조회하던 중 새 행이 반영되면 이전 캐시 응답을 버리고 DBMS에서 조회한다. 서버별 UUID는 재시작 뒤 같은 버전에 도달해도 키가 충돌하지 않게 한다.

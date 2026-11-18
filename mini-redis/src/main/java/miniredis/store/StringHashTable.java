@@ -1,11 +1,14 @@
 package miniredis.store;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 
 /** 버킷 배열과 체이닝을 사용하는 문자열 해시 테이블. 스레드 안전하지 않다. */
 final class StringHashTable {
     private Node[] buckets;
     private int size;
+    private int resizeCount;
 
     StringHashTable(int initialCapacity) {
         if (initialCapacity <= 0) {
@@ -70,7 +73,8 @@ final class StringHashTable {
         return Optional.empty();
     }
 
-    void removeExpired(long now) {
+    int removeExpired(long now) {
+        int before = size;
         for (int i = 0; i < buckets.length; i++) {
             Node previous = null;
             Node node = buckets[i];
@@ -89,6 +93,39 @@ final class StringHashTable {
                 node = next;
             }
         }
+        return before - size;
+    }
+
+    KeyValueStore.Stats stats(long now, long activelyExpired) {
+        var keys = new ArrayList<KeyValueStore.KeyView>();
+        var occupied = new ArrayList<KeyValueStore.BucketView>();
+        int liveKeys = 0;
+        int usedBuckets = 0;
+        int maxChainLength = 0;
+        for (int index = 0; index < buckets.length; index++) {
+            int chainLength = 0;
+            for (Node node = buckets[index]; node != null; node = node.next) {
+                if (node.entry.expired(now)) continue;
+                chainLength++;
+                if (keys.size() < 80) {
+                    keys.add(new KeyValueStore.KeyView(preview(node.key), preview(node.entry.value()),
+                            node.entry.expiresAt(), index));
+                }
+            }
+            if (chainLength == 0) continue;
+            liveKeys += chainLength;
+            usedBuckets++;
+            maxChainLength = Math.max(maxChainLength, chainLength);
+            if (occupied.size() < 32) occupied.add(new KeyValueStore.BucketView(index, chainLength));
+        }
+        return new KeyValueStore.Stats(now, liveKeys, buckets.length, usedBuckets, maxChainLength,
+                resizeCount, activelyExpired, List.copyOf(keys), List.copyOf(occupied));
+    }
+
+    private static String preview(String text) {
+        if (text.length() <= 120) return text;
+        int end = Character.isHighSurrogate(text.charAt(119)) ? 119 : 120;
+        return text.substring(0, end) + "…";
     }
 
     record Entry(String value, Long expiresAt) {
@@ -142,6 +179,7 @@ final class StringHashTable {
         }
         // 노드를 재사용해 연결만 바꾼다. 재배치는 신규 삽입이 아니므로 size는 유지한다.
         buckets = expanded;
+        resizeCount++;
     }
 
     private static int bucketIndex(String key, int capacity) {
