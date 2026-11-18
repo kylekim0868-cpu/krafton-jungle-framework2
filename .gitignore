@@ -17,3 +17,6 @@
 # Independent Mini DBMS build output and runtime tables
 /mini-dbms/target/
 /mini-dbms/data/
+
+# macOS Finder metadata (all directories)
+.DS_Store
