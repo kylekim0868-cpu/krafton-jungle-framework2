@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2016" height="888" viewBox="0 0 2016 888">
+<rect width="2016" height="888" fill="#f2f5f8"/>
+<text x="44" y="42" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="48" font-weight="900" fill="#17212d">결과: 조회 지연 · DB 열기 시간 · 동시 스캔 처리량</text>
+<rect x="44" y="128" width="948" height="338" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="72" y="156" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="37" font-weight="900" fill="#17212d">같은 SQL, 인덱스 ON / OFF</text>
+<polyline points="276,380 918,380" fill="none" stroke="#d6deeb" stroke-width="2" stroke-linejoin="round"/>
+<polyline points="276.0,230 276.0,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="262.0" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">0.01</text>
+<polyline points="404.4,230 404.4,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="390.4" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">0.1</text>
+<polyline points="532.8,230 532.8,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="518.8" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">1</text>
+<polyline points="661.2,230 661.2,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="647.2" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">10</text>
+<polyline points="789.6,230 789.6,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="775.6" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">100</text>
+<polyline points="918.0,230 918.0,380" fill="none" stroke="#d6deeb" stroke-width="1" stroke-linejoin="round"/>
+<text x="904.0" y="398" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="21" font-weight="500" fill="#3b4d6b">1000</text>
+<text x="74" y="239" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#7c8faf">인덱스 OFF</text>
+<polyline points="276,252 834.3094855906229,252" fill="none" stroke="#7c8faf" stroke-width="6" stroke-linejoin="round"/>
+<rect x="828.3094855906229" y="246" width="12" height="12" rx="6" fill="#7c8faf" stroke="#7c8faf" stroke-width="2"/>
+<text x="732" y="216" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="900" fill="#7c8faf">222.948583 ms</text>
+<text x="74" y="325" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#233e94">인덱스 ON</text>
+<polyline points="276,338 372.64586402755174,338" fill="none" stroke="#233e94" stroke-width="6" stroke-linejoin="round"/>
+<rect x="366.64586402755174" y="332" width="12" height="12" rx="6" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="390.64586402755174" y="302" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="900" fill="#233e94">0.056584 ms</text>
+<text x="74" y="434" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="900" fill="#233e94">측정된 p50의 비율 약 3,940:1</text>
+<rect x="1024" y="128" width="948" height="338" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="1052" y="156" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="37" font-weight="900" fill="#17212d">DB 열기 시간</text>
+<text x="1054" y="247" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="900" fill="#7c8faf">전체 재구축</text>
+<rect x="1294" y="252" width="531.240672" height="28" rx="6" fill="#7c8faf" stroke="#7c8faf" stroke-width="2"/>
+<text x="1294" y="214" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#7c8faf">448.683 ms</text>
+<text x="1054" y="333" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="900" fill="#233e94">체크포인트</text>
+<rect x="1294" y="338" width="102.736864" height="28" rx="6" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1294" y="300" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#233e94">86.771 ms</text>
+<polyline points="1294,392 1886,392" fill="none" stroke="#d6deeb" stroke-width="2" stroke-linejoin="round"/>
+<text x="1289.0" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">0</text>
+<text x="1407.4" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">100</text>
+<text x="1525.8" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">200</text>
+<text x="1644.2" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">300</text>
+<text x="1762.6" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">400</text>
+<text x="1881.0" y="404" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">500</text>
+<text x="1054" y="434" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="900" fill="#233e94">약 80.7% 단축</text>
+<rect x="44" y="506" width="948" height="338" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="72" y="534" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="37" font-weight="900" fill="#17212d">8워커 전체 스캔 처리량</text>
+<text x="74" y="615" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="900" fill="#7c8faf">공통 모니터</text>
+<rect x="294" y="620" width="152.067" height="28" rx="6" fill="#7c8faf" stroke="#7c8faf" stroke-width="2"/>
+<text x="294" y="582" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#7c8faf">25.95 req/s</text>
+<text x="74" y="701" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="900" fill="#233e94">읽기·쓰기 락</text>
+<rect x="294" y="706" width="554.063" height="28" rx="6" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="294" y="668" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="900" fill="#233e94">94.55 req/s</text>
+<polyline points="294,760 880,760" fill="none" stroke="#d6deeb" stroke-width="2" stroke-linejoin="round"/>
+<text x="289.0" y="772" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">0</text>
+<text x="435.5" y="772" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">25</text>
+<text x="582.0" y="772" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">50</text>
+<text x="728.5" y="772" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">75</text>
+<text x="875.0" y="772" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="20" font-weight="500" fill="#3b4d6b">100</text>
+<text x="74" y="812" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="900" fill="#233e94">약 3.64배 · 8워커 전체 스캔</text>
+<rect x="1024" y="506" width="948" height="338" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="1052" y="534" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="37" font-weight="900" fill="#17212d">응답 지연과 비용도 함께 확인</text>
+<text x="1054" y="620" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">스캔 p95</text>
+<text x="1364" y="620" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="34" font-weight="900" fill="#233e94">98.94 → 127.82 ms</text>
+<text x="1054" y="684" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">ID 단건 처리량</text>
+<text x="1364" y="684" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="34" font-weight="900" fill="#233e94">약 7.7% 감소</text>
+<text x="1054" y="748" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">ID 단건 p95</text>
+<text x="1364" y="748" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#233e94">0.0030 → 0.0543 ms</text>
+<text x="1054" y="812" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#3b4d6b">긴 스캔의 처리량 개선 · 모든 조회의 가속은 아님</text>
+</svg>

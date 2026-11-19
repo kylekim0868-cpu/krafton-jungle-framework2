@@ -8,6 +8,7 @@ import miniredis.persistence.StorageUnavailableException;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -18,6 +19,7 @@ public final class KeyValueStore implements AutoCloseable {
     private MutationLog log;
     private boolean writesFailed;
     private boolean closed;
+    private long activelyExpired;
 
     public KeyValueStore(int expectedEntries) {
         this(expectedEntries, Clock.systemUTC());
@@ -145,7 +147,23 @@ public final class KeyValueStore implements AutoCloseable {
         return present;
     }
 
-    /** 유효 키 수. 만료 정리는 O(버킷 수 + 키 수)이며 백그라운드 스캐너는 없다. */
+    /** 절대 만료 시각으로 재계산할 수 있는 삭제이므로 AOF에 추가하지 않는다. */
+    public synchronized void expireEntries() {
+        ensureOpen();
+        activelyExpired += table.removeExpired(clock.millis());
+    }
+
+    public synchronized Stats stats() {
+        ensureOpen();
+        return table.stats(clock.millis(), activelyExpired);
+    }
+
+    public record KeyView(String keyPreview, String valuePreview, Long expiresAt, int bucket) { }
+    public record BucketView(int index, int chainLength) { }
+    public record Stats(long observedAt, int liveKeys, int capacity, int usedBuckets, int maxChainLength,
+                        int resizeCount, long activelyExpired, List<KeyView> keys, List<BucketView> buckets) { }
+
+    /** 유효 키 수. 만료 정리는 O(버킷 수 + 키 수)다. */
     public synchronized int size() {
         ensureOpen();
         table.removeExpired(clock.millis());

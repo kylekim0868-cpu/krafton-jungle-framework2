@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2016" height="930" viewBox="0 0 2016 930">
+<rect width="2016" height="930" fill="#f2f5f8"/>
+<text x="44" y="42" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="48" font-weight="900" fill="#17212d">동시 조회: 읽기끼리 기다리던 구간을 줄였다</text>
+<text x="44" y="114" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="500" fill="#3b4d6b">실행 순서 개념도 · 상자 길이는 실제 소요 시간을 뜻하지 않음</text>
+<rect x="44" y="190" width="448" height="206" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="224" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">공통 모니터</text>
+<text x="76" y="292" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">읽기끼리도 락 대기</text>
+<text x="76" y="336" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">SELECT를 순차 실행</text>
+<rect x="560" y="245" width="254" height="90" rx="18" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="592" y="275" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">SELECT 1</text>
+<polyline points="823,290 848,290" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="836.8548268203132,281.5273903196954 848,290 836.8548268203132,298.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="862" y="245" width="254" height="90" rx="18" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="894" y="275" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">SELECT 2</text>
+<polyline points="1125,290 1150,290" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1138.8548268203133,281.5273903196954 1150,290 1138.8548268203133,298.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1164" y="245" width="254" height="90" rx="18" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="1196" y="275" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="900" fill="#17212d">SELECT 3</text>
+<rect x="1530" y="190" width="442" height="206" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="1562" y="224" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="44" font-weight="900" fill="#17212d">25.95 req/s</text>
+<text x="1562" y="292" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">8워커 전체 스캔</text>
+<rect x="44" y="498" width="448" height="254" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="76" y="532" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">ReadWriteLock</text>
+<text x="76" y="600" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">SELECT끼리는 동시 실행</text>
+<text x="76" y="644" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">INSERT·종료는 배타 실행</text>
+<polyline points="512,540 536,540 536,706" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="536,541 560,541" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="548.8548268203132,532.5273903196954 560,541 548.8548268203132,549.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="576" y="512" width="866" height="58" rx="14" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="608" y="527" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#17212d">SELECT 1  ·  공유 읽기 락</text>
+<polyline points="536,619 560,619" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="548.8548268203132,610.5273903196954 560,619 548.8548268203132,627.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="576" y="590" width="866" height="58" rx="14" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="608" y="605" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#17212d">SELECT 2  ·  공유 읽기 락</text>
+<polyline points="536,697 560,697" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="548.8548268203132,688.5273903196954 560,697 548.8548268203132,705.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="576" y="668" width="866" height="58" rx="14" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="608" y="683" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#17212d">SELECT 3  ·  공유 읽기 락</text>
+<rect x="1530" y="498" width="442" height="254" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1562" y="532" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="44" font-weight="900" fill="#ffffff">94.55 req/s</text>
+<text x="1562" y="600" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#e1ecff">처리량 약 3.64배</text>
+<text x="1562" y="644" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#e1ecff">8워커 전체 스캔</text>
+<text x="44" y="802" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#233e94">비용도 확인: 스캔 p95 98.94 → 127.82 ms 증가 · ID 단건 처리량 약 7.7% 감소</text>
+<text x="44" y="858" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="500" fill="#3b4d6b">p95 = 측정한 요청의 약 95%가 이 시간 안에 완료되는 응답 시간</text>
+</svg>

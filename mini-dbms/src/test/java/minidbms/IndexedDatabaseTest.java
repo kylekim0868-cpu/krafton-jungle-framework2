@@ -9,6 +9,23 @@ import static org.junit.jupiter.api.Assertions.*;
 @Timeout(20)
 class IndexedDatabaseTest {
     @TempDir Path directory;
+    @Test void rebuiltRangeReturnsTheSameRowsAsAnIndexDisabledScan() throws Exception {
+        try (var db = new Database(directory)) {
+            for (int i = 0; i < 350; i++) db.execute(new SqlStatement.Insert("range", i));
+        }
+        try (var db = new Database(directory)) {
+            var sql = "SELECT id, price FROM products WHERE id BETWEEN 61 AND 140 LIMIT 75;";
+            var indexed = new SqlEngine(db).execute(sql).getFirst();
+            var scanned = new SqlEngine(db, false).execute(sql).getFirst();
+            assertEquals("PRIMARY_KEY_RANGE", indexed.accessPath());
+            assertEquals("TABLE_SCAN", scanned.accessPath());
+            assertEquals(scanned.rows(), indexed.rows());
+            assertEquals(75, indexed.rows().size());
+            assertEquals(61L, indexed.rows().getFirst().get("id"));
+            assertEquals(135L, indexed.rows().getLast().get("id"));
+        }
+    }
+
     @Test void indexedIdsEqualScannedRowsBeforeAndAfterRebuildingFromFile() throws Exception {
         try(var db=new Database(directory)) {
             for(int i=0;i<4000;i++) db.execute(new SqlStatement.Insert("사과🍎-"+i,i));

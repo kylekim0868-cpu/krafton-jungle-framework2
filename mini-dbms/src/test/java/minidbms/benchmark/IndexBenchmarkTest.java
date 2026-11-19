@@ -11,7 +11,7 @@ class IndexBenchmarkTest {
     @Test void exercisesBothRealAccessPathsAndRebuildsTheIndex() throws Exception {
         var result=IndexBenchmark.run(directory,1000,8,2);
         assertEquals(1000,result.structure().entries()); assertTrue(result.structure().height()>1);
-        assertEquals(8,result.idNanos().length); assertEquals(8,result.nameNanos().length);
+        assertEquals(8,result.idNanos().length); assertEquals(8,result.scanNanos().length);
         assertEquals(1,result.keys()[0]); assertEquals(1000,result.keys()[7]);
         assertTrue(result.fileBytes()>1000*20); assertTrue(result.idIndex().p50Ms()>0);
         assertThrows(IllegalArgumentException.class,()->IndexBenchmark.run(directory,1000,8,2));

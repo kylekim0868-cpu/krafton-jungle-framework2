@@ -1,0 +1,70 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2016" height="958" viewBox="0 0 2016 958">
+<rect width="2016" height="958" fill="#f2f5f8"/>
+<text x="44" y="42" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="46" font-weight="900" fill="#17212d">벤치마크: 조건 고정 → 경로 변경 → 반복 측정 → 결과 검증</text>
+<rect x="44" y="156" width="440" height="218" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="190" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">01  동일 SQL</text>
+<text x="76" y="258" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">100만 행 · 같은 20개 ID</text>
+<polyline points="500,264 540,264" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="528.8548268203132,255.52739031969546 540,264 528.8548268203132,272.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="560" y="156" width="544" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="590" y="184" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">비교 경로</text>
+<text x="590" y="240" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">SELECT * ... id = ? LIMIT 1</text>
+<text x="590" y="284" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">인덱스 OFF ↔ ON 교대 측정</text>
+<polyline points="1120,264 1160,264" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1148.8548268203133,255.52739031969546 1160,264 1148.8548268203133,272.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1180" y="156" width="448" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="1208" y="184" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">반복 측정</text>
+<text x="1208" y="240" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">워밍업 3쌍 → 측정 20쌍</text>
+<text x="1208" y="284" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">SQL 파싱·파일 읽기·결과 생성 포함</text>
+<polyline points="1644,264 1680,264" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1668.8548268203133,255.52739031969546 1680,264 1668.8548268203133,272.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1700" y="156" width="272" height="218" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1724" y="184" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#ffffff">검증 · 결과</text>
+<text x="1724" y="240" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">반환 행 일치 확인</text>
+<text x="1724" y="280" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">p50 · ms</text>
+<text x="1724" y="320" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">222.95 → 0.0566</text>
+<rect x="44" y="426" width="440" height="218" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="460" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">02  DB 열기</text>
+<text x="76" y="528" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">동일 100만 행 JSONL</text>
+<polyline points="500,534 540,534" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="528.8548268203132,525.5273903196954 540,534 528.8548268203132,542.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="560" y="426" width="544" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="590" y="454" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">비교 경로</text>
+<text x="590" y="510" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">전체 재구축 ↔ 체크포인트</text>
+<text x="590" y="554" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">추가 1,000행의 증분 복원도 확인</text>
+<polyline points="1120,534 1160,534" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1148.8548268203133,525.5273903196954 1160,534 1148.8548268203133,542.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1180" y="426" width="448" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="1208" y="454" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">반복 측정</text>
+<text x="1208" y="510" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">모드별 워밍업 5회 → 측정 15회</text>
+<text x="1208" y="554" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">Database 열기만 측정</text>
+<polyline points="1644,534 1680,534" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1668.8548268203133,525.5273903196954 1680,534 1668.8548268203133,542.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1700" y="426" width="272" height="218" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1724" y="454" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#ffffff">검증 · 결과</text>
+<text x="1724" y="510" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">마지막 ID·revision 확인</text>
+<text x="1724" y="550" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">p50 · ms</text>
+<text x="1724" y="590" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">448.68 → 86.77</text>
+<rect x="44" y="696" width="440" height="218" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="730" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">03  동시 조회</text>
+<text x="76" y="798" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">동일 3만 행 · 1 / 8워커</text>
+<polyline points="500,804 540,804" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="528.8548268203132,795.5273903196954 540,804 528.8548268203132,812.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="560" y="696" width="544" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="590" y="724" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">비교 경로</text>
+<text x="590" y="780" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">공통 모니터 ↔ ReadWriteLock</text>
+<text x="590" y="824" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="500" fill="#3b4d6b">마지막 행 스캔 · 같은 행 ID 조회</text>
+<polyline points="1120,804 1160,804" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1148.8548268203133,795.5273903196954 1160,804 1148.8548268203133,812.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1180" y="696" width="448" height="218" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="1208" y="724" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">반복 측정</text>
+<text x="1208" y="780" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">빌드 교대 · 별도 JVM 3회</text>
+<text x="1208" y="824" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">스캔: 워커당 워밍업 20 / 측정 80</text>
+<polyline points="1644,804 1680,804" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1668.8548268203133,795.5273903196954 1680,804 1668.8548268203133,812.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1700" y="696" width="272" height="218" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1724" y="724" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#ffffff">검증 · 결과</text>
+<text x="1724" y="780" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">매 요청 마지막 ID 확인</text>
+<text x="1724" y="820" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">처리량 · req/s</text>
+<text x="1724" y="860" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="25" font-weight="500" fill="#e1ecff">25.95 → 94.55</text>
+</svg>

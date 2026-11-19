@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2016" height="858" viewBox="0 0 2016 858">
+<rect width="2016" height="858" fill="#f2f5f8"/>
+<rect x="44" y="44" width="440" height="206" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="78" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">CLI 요청</text>
+<text x="76" y="146" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">SQL 파일 · 직접 실행</text>
+<rect x="44" y="278" width="440" height="206" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="312" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">HTTP 요청</text>
+<text x="76" y="380" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">POST /query</text>
+<polyline points="484,147 538,147 538,272" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="484,381 538,381 538,272 600,272" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="588.8548268203132,263.5273903196954 600,272 588.8548268203132,280.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="600" y="160" width="380" height="250" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="632" y="194" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">SQL Parser</text>
+<text x="632" y="262" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">문법·입력 검증</text>
+<text x="632" y="306" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">실행문으로 변환</text>
+<polyline points="996,272 1062,272" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1050.8548268203133,263.5273903196954 1062,272 1050.8548268203133,280.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1080" y="160" width="440" height="250" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="1112" y="194" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">SqlEngine · DB</text>
+<text x="1112" y="262" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">ID → B+Tree 위치 조회</text>
+<text x="1112" y="306" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">그 외 → 전체 스캔</text>
+<polyline points="1536,272 1592,272" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1580.8548268203133,263.5273903196954 1592,272 1580.8548268203133,280.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1610" y="160" width="362" height="250" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1642" y="194" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#ffffff">JSONL 파일</text>
+<text x="1642" y="262" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#e1ecff">원본 레코드 저장</text>
+<text x="1642" y="306" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#e1ecff">선택한 경로로 읽기</text>
+<polyline points="790,410 790,520" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="798.4726096803046,508.85482682031324 790,520 781.5273903196954,508.85482682031324" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<text x="814" y="452" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="28" font-weight="900" fill="#233e94">HTTP 비인덱스 SELECT</text>
+<text x="814" y="490" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="27" font-weight="500" fill="#3b4d6b">캐시 사용을 선택했을 때</text>
+<rect x="600" y="540" width="920" height="178" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="632" y="574" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">Mini Redis · 별도 HTTP 서버</text>
+<text x="632" y="642" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">HIT → 캐시 응답   /   MISS·장애 → DB 직접 조회</text>
+<polyline points="1520,630 1562,630 1562,458 1300,458 1300,410" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1291.5273903196955,421.14517317968676 1300,410 1308.4726096803045,421.14517317968676" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<text x="1600" y="574" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#233e94">MISS·장애</text>
+<text x="1600" y="620" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="500" fill="#3b4d6b">DB 조회로 이어짐</text>
+<rect x="44" y="766" width="1928" height="60" rx="18" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="782" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="29" font-weight="900" fill="#233e94">재시작: products.index 검증 → B+Tree 복원 → 체크포인트 이후 추가 행만 JSON 파싱</text>
+</svg>

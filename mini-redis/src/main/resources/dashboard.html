@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini Redis 대시보드</title>
+<style>
+:root{font:16px system-ui,sans-serif;color:#17232c;background:#f4f6f5}
+*{box-sizing:border-box}body{margin:0}main{max-width:1100px;margin:auto;padding:clamp(1rem,4vw,3rem)}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+h1{font-size:clamp(1.65rem,5vw,2.6rem);letter-spacing:-.04em;margin:.4rem 0 1.4rem}
+h2{font-size:1.1rem;margin:0 0 1rem}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(115px,1fr));gap:.65rem;margin-bottom:1.2rem}
+.metric,section{background:white;border:1px solid #dce3df;border-radius:.65rem;padding:1rem;min-width:0}
+.metric span{font-size:.83rem;color:#48635b;display:block}
+.metric strong{font-size:1.25rem;font-variant-numeric:tabular-nums}
+section{margin-bottom:1.2rem}.split{display:grid;grid-template-columns:3fr 2fr;gap:1.2rem}
+label{display:block;font-size:.88rem;margin:.65rem 0 .3rem}
+input,textarea,button{font:inherit;border-radius:.35rem;padding:.55rem .65rem;border:1px solid #879e93}
+input,textarea{width:100%;color:inherit;background:#fff}
+.actions{display:flex;gap:.45rem;flex-wrap:wrap;margin-top:.75rem}
+button{cursor:pointer;background:#fff;color:#1b352c}button[type=submit]{background:#144f3c;color:white}
+output{display:block;margin-top:.8rem;min-height:1.4em;white-space:pre-wrap;overflow-wrap:anywhere}
+#connection,#sample,#bucket-sample{color:#48635b;font-size:.88rem}
+table{border-collapse:collapse;width:100%;table-layout:fixed}
+th,td{text-align:start;padding:.45rem;border-bottom:1px solid #e8eeeb;overflow-wrap:anywhere;font-size:.85rem}
+td:nth-child(-n+2){font-family:ui-monospace,monospace}
+#buckets{display:grid;gap:.45rem} .bucket{display:grid;grid-template-columns:5.2rem 1fr 2rem;align-items:center;gap:.5rem;font-size:.88rem}
+meter{width:100%;accent-color:#176748}
+@media(max-width:700px){.split{grid-template-columns:1fr;gap:0}}
+</style>
+</head>
+<body>
+<main>
+<header><h1>Mini Redis 대시보드</h1><span id="connection" role="status">연결 확인 중</span></header>
+<div class="metrics">
+  <div class="metric"><span>유효 키</span><strong id="liveKeys">–</strong></div>
+  <div class="metric"><span>사용 중인 버킷</span><strong id="capacity">–</strong></div>
+  <div class="metric"><span>최대 체인 길이</span><strong id="maxChainLength">–</strong></div>
+  <div class="metric"><span>리사이즈</span><strong id="resizeCount">–</strong></div>
+  <div class="metric"><span>주기적으로 만료 정리</span><strong id="activelyExpired">–</strong></div>
+</div>
+<div class="split">
+  <section>
+    <h2>키 조작</h2>
+    <form id="key-form">
+      <label for="key">키</label><input id="key" autocomplete="off" required>
+      <label for="value">값</label><textarea id="value" rows="2"></textarea>
+      <label for="ttl">TTL (ms, 비우면 만료 없음)</label><input id="ttl" type="number" min="1" step="1">
+      <div class="actions">
+        <button type="submit">저장</button><button type="button" id="get">조회</button><button type="button" id="delete">삭제</button>
+      </div>
+      <output id="result" role="status"></output>
+    </form>
+  </section>
+  <section><h2>사용 중인 버킷 분포</h2><p id="bucket-sample"></p><div id="buckets"></div></section>
+</div>
+<section>
+  <h2>키 목록</h2>
+  <p id="sample"></p>
+  <table>
+    <thead><tr><th>키</th><th>값</th><th>남은 TTL</th><th>버킷</th></tr></thead>
+    <tbody id="keys"></tbody>
+  </table>
+</section>
+</main>
+<script>
+'use strict';
+const el = (id) => document.getElementById(id);
+const format = (value) => value.toLocaleString('ko-KR');
+
+async function change(method) {
+  if (!el('key').reportValidity()) return;
+  const key = el('key').value;
+  if (key === '.' || key === '..') {
+    el('result').textContent = '브라우저 주소의 경로로 해석되는 키입니다.';
+    return;
+  }
+  const options = {method};
+  if (method === 'PUT') {
+    if (!el('key-form').reportValidity()) return;
+    const payload = {value: el('value').value};
+    const ttl = el('ttl').valueAsNumber;
+    if (Number.isFinite(ttl)) {
+      if (!Number.isSafeInteger(ttl)) {
+        el('result').textContent = 'TTL을 안전한 정수 범위 안에서 입력하세요.';
+        return;
+      }
+      payload.ttlMs = ttl;
+    }
+    options.headers = {'Content-Type': 'application/json'};
+    options.body = JSON.stringify(payload);
+  }
+  try {
+    const response = await fetch('/keys/' + encodeURIComponent(key), options);
+    let message = 'HTTP ' + response.status;
+    if (method === 'GET' && response.ok) message += ' · ' + JSON.stringify((await response.json()).value);
+    else if (response.status === 404) message += ' · 키가 없거나 만료되었습니다.';
+    else if (!response.ok) message += ' · ' + (await response.text());
+    el('result').textContent = message;
+    if (response.ok && method !== 'GET') void refresh();
+  } catch (error) {
+    el('result').textContent = '요청 실패 · ' + error.message;
+  }
+}
+
+let refreshing = false;
+async function refresh() {
+  if (refreshing) return;
+  refreshing = true;
+  try {
+    const response = await fetch('/stats', {cache: 'no-store'});
+    if (!response.ok) throw new Error('HTTP ' + response.status);
+    const stats = await response.json();
+    for (const id of ['liveKeys', 'maxChainLength', 'resizeCount', 'activelyExpired']) {
+      el(id).textContent = format(stats[id]);
+    }
+    el('capacity').textContent = format(stats.usedBuckets) + ' / ' + format(stats.capacity);
+    const rows = stats.keys.map((key) => {
+      const row = document.createElement('tr');
+      const ttl = key.expiresAt === null ? '만료 없음' : format(key.expiresAt - stats.observedAt) + ' ms';
+      for (const value of [key.keyPreview, key.valuePreview, ttl, format(key.bucket)]) {
+        row.insertCell().textContent = value;
+      }
+      return row;
+    });
+    el('keys').replaceChildren(...rows);
+    el('sample').textContent = format(stats.keys.length) + ' / ' + format(stats.liveKeys) + '개 표시';
+    el('bucket-sample').textContent = format(stats.buckets.length) + ' / ' + format(stats.usedBuckets) + '개 표시';
+    const bars = stats.buckets.map((bucket) => {
+      const bar = document.createElement('div');
+      bar.className = 'bucket';
+      const label = document.createElement('span');
+      label.textContent = '#' + format(bucket.index);
+      const meter = document.createElement('meter');
+      meter.max = stats.maxChainLength;
+      meter.value = bucket.chainLength;
+      meter.setAttribute('aria-label', '버킷 ' + bucket.index + '의 체인 길이');
+      const count = document.createElement('span');
+      count.textContent = format(bucket.chainLength);
+      bar.append(label, meter, count);
+      return bar;
+    });
+    el('buckets').replaceChildren(...(bars.length ? bars : ['유효한 키가 없습니다.']));
+    el('connection').textContent = '3초마다 새로고침';
+  } catch {
+    el('connection').textContent = '통계를 불러올 수 없습니다.';
+  } finally {
+    refreshing = false;
+  }
+}
+
+el('key-form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  void change('PUT');
+});
+el('get').addEventListener('click', () => change('GET'));
+el('delete').addEventListener('click', () => change('DELETE'));
+void refresh();
+setInterval(refresh, 3000);
+</script>
+</body>
+</html>
