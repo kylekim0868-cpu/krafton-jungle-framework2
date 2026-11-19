@@ -90,17 +90,3 @@ Java 25 · B+Tree · HTTP API · JUnit 5
 | **동시성 개선과 비용** | 전체 스캔 처리량 **약 3.64배**. 스캔 p95는 증가했고 ID 단건 처리량은 **약 7.7% 감소**, p95는 **0.0030 → 0.0543 ms**로 증가했다. |
 | **실측 환경** | 동일 SQL: macOS 14.8.9/aarch64/Java 25.0.5.1/heap 512 MiB. 재시작·동시성: Apple M1 Pro 8코어/16 GB/Java 25.0.5.1/heap 512 MiB. |
 | **반영 상태** | 선별 통합은 로컬 코드에 있음. 체크포인트는 원격 `ym-mini-dbms`에 반영됨. ReadWriteLock은 **초안 PR #64**. |
-
-<details>
-<summary>벤치마크 조건과 근거 자료</summary>
-
-- **동일 SQL:** `SELECT * FROM products WHERE id = ? LIMIT 1`. 100만 행, 고정 seed로 선택한 동일 20개 키, 워밍업 3쌍 후 인덱스 ON/OFF를 교대 측정하고 반환 행을 대조했다. 단일 스레드이며 SQL 파싱·실행·파일 읽기·결과 생성이 포함된다. HTTP·Redis는 제외한다. [검증 기록](docs/mini-dbms/kjf-64-verification.md) · [원시 지연 JSON](docs/mini-dbms/benchmarks/kjf-64-same-sql-million.json)
-- **재시작:** 동일 JSONL 1,000,000행/50,666,792바이트. `new Database` 직전부터 열기 완료까지 측정한다. 모드별 워밍업 5회·측정 15회, 마지막 ID·revision을 확인했다. 템플릿 복사·검증 조회·종료는 제외한다. 워밍업한 JVM·OS 파일 캐시 조건이며 15표본의 최근접 순위 p95는 최댓값이다. [고정 커밋의 검증 기록](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/blob/c7f438568ae300d393e936a8da42f9f5d5b1f8d5/docs/mini-dbms/dbms-04-verification.md)
-- **동시성:** 동일 30,000행 JSONL·체크포인트, 마지막 행의 name 스캔과 같은 행의 ID 인덱스 조회를 비교한다. 1/8워커, 빌드 교대·별도 JVM 3회. 워커당 스캔 워밍업 20/측정 80회, 인덱스 워밍업 10,000/측정 50,000회. 처리량·p95의 실행별 중앙값이다. HTTP·Redis·SQL 파싱·파일 열기는 제외한다. 스캔 p95의 실행 간 범위는 모니터 53.97–2335.56 ms, ReadWriteLock 87.93–149.55 ms다. 쓰기 지연은 측정하지 않았다. [고정 커밋의 검증 기록](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/blob/b3519238d2bc896f1bc6a4643db840ed9366d2e6/docs/mini-dbms/dbms-05-verification.md) · [초안 PR #64](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/pull/64)
-- **선별 통합 검증:** [DBMS](docs/mini-dbms/kjf-64-verification.md) · [Redis](docs/mini-redis/kjf-64-verification.md). 모든 수치는 기존 로컬 실험 기록에서 가져왔으며 이번 문서 수정 과정에서 벤치마크를 재실행하지 않았다.
-
-</details>
-
----
-
-[발표 대본 — 3분 50초](docs/mini-dbms/week12-presentation-script.md)
