@@ -10,10 +10,11 @@ DBMS-01~DBMS-03 구현을 이 프로젝트의 `mini-dbms/`에서 독립적으로
 | DBMS-02 | 직접 구현한 메모리 B+ 트리 ID 인덱스 | leaf/internal/root 분할, 재구축, 100만건 이상 삽입 후 ID조회·비인덱스 검색 실측 | [KJF-60](https://kylekim0868.atlassian.net/browse/KJF-60) | `feat/KJF-60-ym-bplus-index` |
 | DBMS-03 | HTTP API와 저장소 동시성 | 실제 병렬 HTTP INSERT에서 ID 중복 없이 파일·인덱스 일치, 재시작 후 보존 | [KJF-61](https://kylekim0868.atlassian.net/browse/KJF-61) | `feat/KJF-61-ym-http-concurrency` |
 | DBMS-04 | B+ 트리 체크포인트와 증분 복구 | 단건·범위·다음 ID 일치, 꼬리 복구와 손상 시 재구축, 동일 데이터의 재시작 실측 | [KJF-65](https://kylekim0868.atlassian.net/browse/KJF-65) | [feat/KJF-65-ym-index-checkpoint](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/feat/KJF-65-ym-index-checkpoint) |
+| DBMS-05 | 읽기·쓰기 잠금 분리 | 동시 SELECT, 쓰기·종료 상호 배제, 장애 상태 전파와 처리량·p95 실측 | [KJF-66](https://kylekim0868.atlassian.net/browse/KJF-66) | [refactor/KJF-66-ym-read-write-lock](https://github.com/kylekim0868-cpu/krafton-jungle-framework2/tree/refactor/KJF-66-ym-read-write-lock) |
 
 ## 이슈·브랜치 연결
 
-요구사항 하나에 Task 하나·브랜치 하나를 사용한다. 새 브랜치는 구현 전에 즉시 publish하고 원격 SHA/upstream을 검증한다. 이후 단계는 이전 단계의 검증 커밋에서 분기한다. 첫 PR은 ym-mini-dbms, 이후 PR은 직전 단계 브랜치를 대상으로 한다.
+요구사항 하나에 Task 하나·브랜치 하나를 사용한다. 새 브랜치는 구현 전에 즉시 publish하고 원격 SHA/upstream을 검증한다. PR은 ym-mini-dbms를 대상으로 한다. 선행 단계가 아직 반영되지 않은 경우에만 선행 검증 커밋에서 분기하고 직전 작업 브랜치를 PR 대상으로 삼는다.
 
 ## 고정 스키마와 SQL 계약
 
@@ -51,14 +52,14 @@ FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 
 
 - maxKeys 기본63인 직접 B+ 트리를 사용한다(최적 설정이라는 주장은 아님). 키 long/값 행 포인터, leaf만 실제 값을 저장하며 leaf간 next 연결을 유지한다. full leaf/internal/root 분할과 중복키 덮어쓰기를 지원한다. 행 삭제가 없어 트리 삭제/병합은 범위 밖이다.
 - `WHERE id = 정수`는 PRIMARY_KEY_INDEX로 포인터 위치를 읽고, ID 범위는 PRIMARY_KEY_RANGE로 리프를 순회한다. name/price/조건 없는 조회는 TABLE_SCAN이다. QueryResult에 accessPath(APPEND/PRIMARY_KEY_INDEX/TABLE_SCAN)를 추가해 실제 경로를 관찰한다.
-- DBMS-02는 시작할 때 검증한 JSONL에서 인덱스를 구축한다. DBMS-04에서 체크포인트 복원 경로를 추가한다. INSERT의 파일 append·인덱스 반영·ID 증가를 같은 모니터로 보호한다. 파일은 추가됐으나 인덱스 반영이 실패하면 이후 명령을 거절하고 재시작 검증이 필요하다.
+- DBMS-02는 시작할 때 검증한 JSONL에서 인덱스를 구축한다. DBMS-04에서 체크포인트 복원 경로를 추가한다. INSERT의 파일 append·인덱스 반영·ID 증가를 동일한 저장소 쓰기 락으로 보호한다. 파일은 추가됐으나 인덱스 반영이 실패하면 이후 명령을 거절하고 재시작 검증이 필요하다.
 - 실험은 새 디렉터리에100만행 삽입·정상 close 후 다시 열어 재구축한 뒤 동일20개 키·각조건 워밍업3회·단일스레드·동일행/컬럼/응답으로 ID검색과name검색을 교대 측정한다. 각 쿼리는 LIMIT1이며 선형탐색은 첫 일치까지 읽는다. JVM heap512MiB, 원시 ns 지연과p50/p95·동작시간합 기반처리량 기록. 다른 필드/접근방식 비교이며 동일 쿼리 계획 비교·운영 성능 보장이 아니다.
 
 [DBMS-02 검증·100만행 실제 측정 기록](dbms-02-verification.md). 교정 후 새 데이터 디렉터리에서 재측정하고 별도 JVM 조회까지 검증했다.
 
 ## DBMS-03 HTTP 계약
 
-- JDK HttpServer, loopback, 고정8개 요청 스레드가 같은 SqlEngine/Database를 공유한다. Database의 공통 모니터 안에서 ID발급·파일append·B+트리반영·ID증가를 직렬화한다. 파일/인덱스 조회도 같은 경계를 사용해 중간 상태가 보이지 않는다.
+- JDK HttpServer, loopback, 고정8개 요청 스레드가 같은 SqlEngine/Database를 공유한다. DBMS-03은 공통 모니터로 ID 발급·파일 append·B+ 트리 반영·ID 증가를 직렬화했다. DBMS-05에서 읽기와 쓰기 락을 분리해 조회 중에도 동일한 정합성을 유지한다.
 - `POST /query`, `Content-Type: application/json`, UTF8 JSON 객체 `{"sql":"SELECT * FROM products WHERE id=1;"}`. SQL은 정확히 한 명령만 허용하며 여러 명령은 실행 전에400으로 거절한다. CLI의 다중 명령 지원은 유지한다.
 - 정상 INSERT/SELECT 모두200과 QueryResult(command/affectedRows/insertedId/rows/accessPath). 없는 ID는200/rows[].
 - 잘못된 JSON·UTF8·sql필드/추가필드/중복필드/추가JSON은400 INVALID_REQUEST. SQL문법·미지원·여러명령은400 INVALID_SQL. 잘못된경로404, 메서드405/Allow POST, 미디어타입415, 본문1MiB초과413 REQUEST_TOO_LARGE. 잘린 HTTP본문의 전송 오류는400 REQUEST_READ_FAILED(연결이 살아있을 때)이며 DB를 고장 상태로 바꾸지 않는다.
@@ -81,3 +82,11 @@ FileChannel append 후 명령 성공, 정상 close에서 force(true)한다. 매 
 - 체크포인트를 사용할 수 없으면 전체 JSONL을 검증해 인덱스를 재구축한다. JSONL의 부분 행·손상·ID 불연속은 기존대로 시작을 거절한다.
 
 [DBMS-04 검증과 재시작 실측](dbms-04-verification.md).
+
+## DBMS-05 동시성 계약
+
+- SELECT, revision, 인덱스 구조 검증은 공유 읽기 락을 사용한다. INSERT는 ID 발급부터 JSONL append와 인덱스 반영까지 배타 쓰기 락을 사용한다.
+- 종료는 진행 중인 읽기·쓰기가 끝난 뒤 배타 락에서 테이블 동기화, 체크포인트 게시, 파일 소유권 해제를 수행한다. 저장소 I/O 오류가 감지되면 진행 중인 SELECT가 결과를 반환하기 전과 이후 명령 진입에서 가용성을 검사한다.
+- Redis 캐시의 revision 확인과 HTTP 응답 계약을 유지한다. 읽기와 쓰기는 데이터베이스 단위에서 서로 배제되며 긴 스캔 동안 쓰기는 대기한다.
+
+[DBMS-05 동시성 검증과 실측](dbms-05-verification.md).
