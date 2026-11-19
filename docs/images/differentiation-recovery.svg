@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2016" height="686" viewBox="0 0 2016 686">
+<rect width="2016" height="686" fill="#f2f5f8"/>
+<text x="44" y="42" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="48" font-weight="900" fill="#17212d">재시작: 전체 JSON 파싱을 복원 + 증분 파싱으로</text>
+<text x="44" y="114" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#233e94">기존</text>
+<rect x="44" y="164" width="560" height="190" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="76" y="198" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">100만 행 JSONL</text>
+<text x="76" y="266" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">매번 전체 JSON 파싱</text>
+<polyline points="624,260 690,260" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="678.8548268203132,251.52739031969546 690,260 678.8548268203132,268.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="710" y="164" width="610" height="190" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="742" y="198" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="40" font-weight="900" fill="#17212d">B+Tree 전체 재구축</text>
+<text x="742" y="266" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">각 ID의 파일 위치·길이를 등록</text>
+<polyline points="1340,260 1406,260" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1394.8548268203133,251.52739031969546 1406,260 1394.8548268203133,268.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1426" y="164" width="546" height="190" rx="22" fill="#ffffff" stroke="#d6deeb" stroke-width="2"/>
+<text x="1458" y="198" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="52" font-weight="900" fill="#17212d">448.683 ms</text>
+<text x="1458" y="266" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">DB 열기 p50</text>
+<text x="44" y="402" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="30" font-weight="900" fill="#233e94">개선</text>
+<rect x="44" y="452" width="560" height="190" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="76" y="486" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">원본·체크포인트 검증</text>
+<text x="76" y="554" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">접두부 바이트를 읽고 해시 대조</text>
+<polyline points="624,548 690,548" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="678.8548268203132,539.5273903196954 690,548 678.8548268203132,556.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="710" y="452" width="610" height="190" rx="22" fill="#e1ecff" stroke="#afc7f4" stroke-width="2"/>
+<text x="742" y="486" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="38" font-weight="900" fill="#17212d">복원 + 추가 행 파싱</text>
+<text x="742" y="554" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#3b4d6b">체크포인트로 트리 복원 · 꼬리만 파싱</text>
+<polyline points="1340,548 1406,548" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<polyline points="1394.8548268203133,539.5273903196954 1406,548 1394.8548268203133,556.4726096803046" fill="none" stroke="#7c8faf" stroke-width="4" stroke-linejoin="round"/>
+<rect x="1426" y="452" width="546" height="190" rx="22" fill="#233e94" stroke="#233e94" stroke-width="2"/>
+<text x="1458" y="486" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="52" font-weight="900" fill="#ffffff">86.771 ms</text>
+<text x="1458" y="554" dominant-baseline="text-before-edge" font-family="Apple SD Gothic Neo, Pretendard, sans-serif" font-size="32" font-weight="500" fill="#e1ecff">약 80.7% 시간 단축</text>
+</svg>
